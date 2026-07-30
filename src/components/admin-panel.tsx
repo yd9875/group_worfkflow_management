@@ -4,10 +4,12 @@ import {
   getJoinCode,
   rejectJoinRequestAction,
   rotateJoinCodeAction,
+  transferOwnershipAction,
   updateMemberAction,
 } from "@/features/actions";
 import { getAdminData } from "@/features/queries";
 import { Building2, ClipboardCheck, KeyRound } from "lucide-react";
+import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 
 const roleLabel = { OWNER: "소유자", ADMIN: "관리자", MEMBER: "구성원" };
 
@@ -95,7 +97,7 @@ export async function AdminPanel({
         <table className="w-full min-w-[48rem] border-collapse text-left text-sm">
           <thead className="bg-slate-50"><tr><th className="p-4">구성원</th><th className="p-4">현재 역할</th><th className="p-4">부서·역할 변경</th><th className="p-4">상태</th></tr></thead>
           <tbody className="divide-y divide-[var(--line)]">
-            {data.members.map((member) => <tr key={member.id}><td className="p-4"><b>{member.user.name}</b><p className="muted mt-1">{member.user.email}</p></td><td className="p-4">{roleLabel[member.role]}</td><td className="p-4">{member.role === "OWNER" ? <span className="muted">소유자는 변경할 수 없습니다</span> : <form action={updateMemberAction} className="flex gap-2"><input type="hidden" name="organizationId" value={organizationId} /><input type="hidden" name="membershipId" value={member.id} /><select className="field w-auto" name="departmentId" defaultValue={member.departmentId}>{data.departments.filter((item) => item.isActive).map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}</select><select className="field w-auto" name="role" defaultValue={member.role}><option value="MEMBER">구성원</option><option value="ADMIN">관리자</option></select><button className="btn btn-secondary" type="submit">저장</button></form>}</td><td className="p-4"><span className={`badge ${member.status === "ACTIVE" ? "badge-green" : "badge-gray"}`}>{member.status === "ACTIVE" ? "활성" : "비활성"}</span></td></tr>)}
+            {data.members.map((member) => <tr key={member.id}><td className="p-4"><b>{member.user.name}</b><p className="muted mt-1">{member.user.email}</p></td><td className="p-4">{roleLabel[member.role]}</td><td className="p-4">{member.role === "OWNER" ? <span className="muted">소유자는 변경할 수 없습니다</span> : <div className="flex flex-wrap gap-2"><form action={updateMemberAction} className="flex gap-2"><input type="hidden" name="organizationId" value={organizationId} /><input type="hidden" name="membershipId" value={member.id} /><select className="field w-auto" name="departmentId" defaultValue={member.departmentId}>{data.departments.filter((item) => item.isActive).map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}</select><select className="field w-auto" name="role" defaultValue={member.role}><option value="MEMBER">구성원</option><option value="ADMIN">관리자</option></select><button className="btn btn-secondary" type="submit">저장</button></form>{data.currentMembership.role === "OWNER" && <form action={transferOwnershipAction}><input type="hidden" name="organizationId" value={organizationId} /><input type="hidden" name="membershipId" value={member.id} /><ConfirmSubmitButton className="btn btn-danger" message={`${member.user.name} 님에게 조직 소유권을 이전할까요? 이전 후 본인은 관리자가 됩니다.`}>소유권 이전</ConfirmSubmitButton></form>}</div>}</td><td className="p-4"><span className={`badge ${member.status === "ACTIVE" ? "badge-green" : "badge-gray"}`}>{member.status === "ACTIVE" ? "활성" : "비활성"}</span></td></tr>)}
           </tbody>
         </table>
       </div>

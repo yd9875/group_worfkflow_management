@@ -115,7 +115,7 @@ export async function listNotifications(organizationId: string) {
 }
 
 export async function getAdminData(organizationId: string) {
-  await requireMembership(organizationId, ["OWNER", "ADMIN"]);
+  const currentMembership = await requireMembership(organizationId, ["OWNER", "ADMIN"]);
   const [requests, departments, members, auditLogs] = await Promise.all([
     prisma.joinRequest.findMany({
       where: { organizationId, status: "PENDING" },
@@ -140,5 +140,5 @@ export async function getAdminData(organizationId: string) {
       take: 100,
     }),
   ]);
-  return { requests, departments, members, auditLogs };
+  return { currentMembership, requests, departments, members, auditLogs };
 }

@@ -10,6 +10,13 @@ primary_region = "nrt"
   TZ = "Asia/Seoul"
   DEFAULT_TIMEZONE = "Asia/Seoul"
   EMAIL_DELIVERY_MODE = "log"
+  APP_URL = "https://group-workflow-management.fly.dev"
+  BETTER_AUTH_URL = "https://group-workflow-management.fly.dev"
+  PRIVACY_CONTROLLER_NAME = "조직 일정 관리 운영자"
+  PRIVACY_DB_COUNTRY = "싱가포르"
+  PRIVACY_DB_PROVIDER = "Aiven Ltd"
+  PRIVACY_DB_CONTACT = "dpo@aiven.io"
+  PRIVACY_DB_INFRA_PROVIDER = "DigitalOcean LLC"
 
 [deploy]
   release_command = "./node_modules/.bin/prisma migrate deploy"

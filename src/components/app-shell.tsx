@@ -11,6 +11,7 @@ import {
   ClipboardList,
   Plus,
   Settings2,
+  UserRoundCog,
   Users,
 } from "lucide-react";
 import { SignOutButton } from "@/components/sign-out-button";
@@ -39,6 +40,7 @@ export function AppShell({
     { href: `${root}/schedule/month`, label: "월간 일정", icon: CalendarDays },
     { href: `${root}/members`, label: "구성원", icon: Users },
     { href: `${root}/notifications`, label: `알림${unreadCount ? ` ${unreadCount}` : ""}`, icon: Bell },
+    { href: "/account", label: "계정", icon: UserRoundCog },
   ];
   const active = (href: string) => pathname.startsWith(href);
 

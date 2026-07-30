@@ -448,6 +448,61 @@ export async function updateMemberAction(formData: FormData) {
   revalidatePath(`/org/${organizationId}/admin/members`);
 }
 
+export async function transferOwnershipAction(formData: FormData) {
+  const organizationId = text(formData, "organizationId");
+  const actor = await requireMembership(organizationId, ["OWNER"]);
+  const membershipId = text(formData, "membershipId");
+  const nextOwner = await prisma.membership.findFirst({
+    where: {
+      id: membershipId,
+      organizationId,
+      status: "ACTIVE",
+      userId: { not: actor.userId },
+    },
+    include: { user: { select: { name: true } } },
+  });
+  if (!nextOwner) {
+    throw new AppError("NOT_FOUND", "소유권을 이전할 구성원을 찾지 못했습니다.", 404);
+  }
+  if (nextOwner.role === "OWNER") {
+    throw new AppError("CONFLICT", "이미 조직 소유자인 구성원입니다.", 409);
+  }
+
+  await prisma.$transaction([
+    prisma.membership.update({
+      where: { id: nextOwner.id },
+      data: { role: "OWNER" },
+    }),
+    prisma.membership.update({
+      where: { id: actor.id },
+      data: { role: "ADMIN" },
+    }),
+    prisma.notification.create({
+      data: {
+        userId: nextOwner.userId,
+        organizationId,
+        type: "OWNERSHIP_TRANSFERRED",
+        title: "조직 소유권을 이전받았습니다",
+        body: `${actor.organization.name}의 새 소유자가 되었습니다.`,
+        resourceType: "ORGANIZATION",
+        resourceId: organizationId,
+      },
+    }),
+    prisma.auditLog.create({
+      data: {
+        organizationId,
+        actorUserId: actor.userId,
+        action: "OWNERSHIP_TRANSFERRED",
+        entityType: "MEMBERSHIP",
+        entityId: nextOwner.id,
+        metadataJson: { nextOwnerUserId: nextOwner.userId },
+      },
+    }),
+  ]);
+  revalidatePath(`/org/${organizationId}/admin/members`);
+  revalidatePath("/organizations");
+}
+
 export async function rotateJoinCodeAction(formData: FormData) {
   const organizationId = text(formData, "organizationId");
   const actor = await requireMembership(organizationId, ["OWNER", "ADMIN"]);

@@ -1,4 +1,5 @@
 import { betterAuth } from "better-auth";
+import { APIError } from "better-auth/api";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { nextCookies } from "better-auth/next-js";
 import { prisma } from "@/lib/db";
@@ -6,6 +7,7 @@ import {
   sendPasswordResetEmail,
   sendVerificationEmail,
 } from "@/lib/email";
+import { prepareAccountDeletion } from "@/lib/account-deletion";
 
 export const auth = betterAuth({
   appName: "조직 일정 관리",
@@ -43,6 +45,17 @@ export const auth = betterAuth({
         type: "string",
         required: true,
         input: true,
+      },
+    },
+    deleteUser: {
+      enabled: true,
+      beforeDelete: async (user) => {
+        const blockedOrganizationName = await prepareAccountDeletion(user.id);
+        if (blockedOrganizationName) {
+          throw new APIError("BAD_REQUEST", {
+            message: `"${blockedOrganizationName}"의 소유권을 다른 구성원에게 이전한 뒤 탈퇴해 주세요.`,
+          });
+        }
       },
     },
   },

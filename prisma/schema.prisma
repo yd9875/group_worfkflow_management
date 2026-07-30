@@ -167,7 +167,7 @@ model Membership {
   joinedAt       DateTime         @default(now())
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
-  user           User             @relation(fields: [userId], references: [id], onDelete: Restrict)
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   department     Department       @relation(fields: [departmentId], references: [id], onDelete: Restrict)
 
@@ -187,7 +187,7 @@ model JoinRequest {
   departmentId   String?
   rejectionReason String?
   organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  user           User              @relation(fields: [userId], references: [id], onDelete: Restrict)
+  user           User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   reviewedBy     User?             @relation("JoinRequestReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
   department     Department?       @relation(fields: [departmentId], references: [id], onDelete: SetNull)
 
@@ -199,8 +199,8 @@ model JoinRequest {
 model Schedule {
   id              String           @id @default(uuid())
   organizationId  String
-  createdByUserId String
-  updatedByUserId String
+  createdByUserId String?
+  updatedByUserId String?
   title           String
   description     String?
   startsAt        DateTime
@@ -215,10 +215,10 @@ model Schedule {
   updatedAt       DateTime         @updatedAt
   deletedAt       DateTime?
   organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  createdBy       User             @relation("ScheduleCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
-  updatedBy       User             @relation("ScheduleUpdater", fields: [updatedByUserId], references: [id], onDelete: Restrict)
+  createdBy       User?            @relation("ScheduleCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  updatedBy       User?            @relation("ScheduleUpdater", fields: [updatedByUserId], references: [id], onDelete: SetNull)
   department      Department?      @relation(fields: [departmentId], references: [id], onDelete: Restrict)
-  targetUser      User?            @relation("ScheduleTarget", fields: [targetUserId], references: [id], onDelete: Restrict)
+  targetUser      User?            @relation("ScheduleTarget", fields: [targetUserId], references: [id], onDelete: Cascade)
 
   @@index([organizationId, startsAt, endsAt])
   @@index([organizationId, departmentId, startsAt])
@@ -238,7 +238,7 @@ model Notification {
   resourceId     String?
   readAt         DateTime?
   createdAt      DateTime     @default(now())
-  user           User         @relation(fields: [userId], references: [id], onDelete: Restrict)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
   @@index([userId, readAt, createdAt(sort: Desc)])

@@ -5,6 +5,10 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, CalendarDays, CheckCircle2, Eye, EyeOff } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
+import {
+  PRIVACY_POLICY_VERSION,
+  SIGNUP_PRIVACY_NOTICE,
+} from "@/lib/privacy";
 
 type Mode = "login" | "signup" | "forgot" | "reset";
 
@@ -64,7 +68,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
             email,
             password,
             consentedAt: new Date().toISOString(),
-            consentVersion: "2026-07-30",
+            consentVersion: PRIVACY_POLICY_VERSION,
             callbackURL: "/verify-email",
           }),
         });
@@ -120,20 +124,19 @@ export function AuthForm({ mode }: { mode: Mode }) {
           조직 일정 관리
         </div>
         <div className="relative z-10 max-w-xl">
-          <p className="mb-5 text-sm font-bold tracking-[.16em] text-emerald-200">ONE SHARED VIEW</p>
+          <p className="mb-5 text-sm font-bold tracking-[.16em] text-emerald-200">GROUP WORKFLOW MANAGEMENT</p>
           <h2 className="text-4xl font-semibold leading-tight tracking-[-.045em] lg:text-6xl">
             조직의 흐름을
             <br />
             한눈에 맞춥니다.
           </h2>
-          <p className="mt-7 max-w-lg text-lg leading-8 text-emerald-50/75">
+          <p className="mt-7 max-w-lg text-base leading-7 text-emerald-50/75">
             조직 전체, 부서, 개인 일정을 주간표와 월간 캘린더에서 함께 확인하세요.
-            필요한 정보는 더 빠르게, 권한은 더 분명하게 관리됩니다.
           </p>
         </div>
         <div className="relative z-10 flex gap-7 text-sm text-emerald-50/70">
-          <span className="flex items-center gap-2"><CheckCircle2 size={16} /> 역할 기반 권한</span>
-          <span className="flex items-center gap-2"><CheckCircle2 size={16} /> 인쇄·PDF 지원</span>
+          <span className="flex items-center gap-2"><CheckCircle2 size={16} /> 통합 일정 관리</span>
+          <span className="flex items-center gap-2"><CheckCircle2 size={16} /> 지속 가능한 업무 협조</span>
         </div>
       </section>
       <main className="auth-panel">
@@ -181,10 +184,51 @@ export function AuthForm({ mode }: { mode: Mode }) {
               </label>
             )}
             {mode === "signup" && (
-              <label className="flex items-start gap-3 text-sm leading-6">
-                <input className="mt-1 size-4 accent-[var(--brand)]" name="consent" type="checkbox" required />
-                <span>개인정보 이용 목적과 보관 정책(버전 2026-07-30)을 확인했으며 이에 동의합니다.</span>
-              </label>
+              <>
+                <section
+                  aria-labelledby="privacy-notice-title"
+                  className="rounded-xl border border-[var(--line)] bg-slate-50/80 p-4 text-sm"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <h2 id="privacy-notice-title" className="font-extrabold">
+                      [필수] 개인정보 수집·이용 안내
+                    </h2>
+                    <span className="badge badge-gray">v{PRIVACY_POLICY_VERSION}</span>
+                  </div>
+                  <dl className="mt-3 grid gap-3 leading-6">
+                    <div>
+                      <dt className="font-bold text-slate-700">수집·이용 목적</dt>
+                      <dd className="muted">{SIGNUP_PRIVACY_NOTICE.purpose}</dd>
+                    </div>
+                    <div>
+                      <dt className="font-bold text-slate-700">수집 항목</dt>
+                      <dd className="muted">
+                        필수: {SIGNUP_PRIVACY_NOTICE.requiredItems}
+                        <br />
+                        자동 생성: {SIGNUP_PRIVACY_NOTICE.automaticItems}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="font-bold text-slate-700">보유·이용 기간</dt>
+                      <dd className="muted">{SIGNUP_PRIVACY_NOTICE.retention}</dd>
+                    </div>
+                    <div>
+                      <dt className="font-bold text-slate-700">동의 거부권과 불이익</dt>
+                      <dd className="muted">{SIGNUP_PRIVACY_NOTICE.refusal}</dd>
+                    </div>
+                  </dl>
+                  <Link
+                    className="mt-3 inline-flex font-bold text-[var(--brand)] underline underline-offset-4"
+                    href="/privacy"
+                  >
+                    개인정보 처리방침 전체 보기
+                  </Link>
+                </section>
+                <label className="flex items-start gap-3 text-sm leading-6">
+                  <input className="mt-1 size-4 accent-[var(--brand)]" name="consent" type="checkbox" required />
+                  <span>위 개인정보 수집·이용 내용을 확인했으며 이에 동의합니다. (필수)</span>
+                </label>
+              </>
             )}
             {message && (
               <p role="alert" className={`rounded-xl px-4 py-3 text-sm ${isError ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-800"}`}>
@@ -206,6 +250,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
             ) : (
               <Link className="font-semibold text-[var(--brand)]" href="/login">로그인으로 돌아가기</Link>
             )}
+            <Link className="muted underline underline-offset-4" href="/privacy">개인정보 처리방침</Link>
           </div>
         </div>
       </main>

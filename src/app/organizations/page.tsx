@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Building2, CalendarDays, Plus, UserRoundPlus } from "lucide-react";
+import { Building2, CalendarDays, Plus, UserRoundCog, UserRoundPlus } from "lucide-react";
 import {
   createOrganizationAction,
   requestJoinAction,
@@ -27,7 +27,10 @@ export default async function OrganizationsPage() {
           <span className="grid size-11 place-items-center rounded-xl bg-[var(--brand)] text-white"><CalendarDays size={21} /></span>
           <div><p className="font-extrabold">조직 일정 관리</p><p className="muted text-sm">{user.name} 님</p></div>
         </div>
-        <div className="w-32"><SignOutButton /></div>
+        <div className="flex items-center gap-2">
+          <Link className="btn btn-secondary" href="/account"><UserRoundCog size={17} /> 계정 설정</Link>
+          <div className="w-32"><SignOutButton /></div>
+        </div>
       </header>
 
       <section>

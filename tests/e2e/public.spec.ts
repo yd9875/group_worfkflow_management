@@ -11,3 +11,24 @@ test("헬스 체크가 정상 상태를 반환한다", async ({ request }) => {
   expect(response.ok()).toBeTruthy();
   expect(await response.json()).toMatchObject({ status: "ok" });
 });
+
+test("회원가입 화면에서 개인정보 수집·이용 내용을 고지한다", async ({ page }) => {
+  await page.goto("/signup");
+  await expect(
+    page.getByRole("heading", { name: "[필수] 개인정보 수집·이용 안내" }),
+  ).toBeVisible();
+  await expect(page.getByText("수집·이용 목적")).toBeVisible();
+  await expect(page.getByText("보유·이용 기간")).toBeVisible();
+  await expect(page.getByText("동의 거부권과 불이익")).toBeVisible();
+  await expect(
+    page.getByRole("checkbox", { name: /개인정보 수집·이용 내용을 확인/ }),
+  ).toHaveAttribute("required", "");
+});
+
+test("개인정보 처리방침에서 국외 보관·처리위탁을 공개한다", async ({ page }) => {
+  await page.goto("/privacy");
+  await expect(page.getByRole("heading", { name: "개인정보 처리방침" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "3. 국외 보관·처리위탁" })).toBeVisible();
+  await expect(page.getByText("Aiven Ltd", { exact: false })).toBeVisible();
+  await expect(page.getByText("싱가포르", { exact: true })).toBeVisible();
+});
