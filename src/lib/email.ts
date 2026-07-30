@@ -30,10 +30,19 @@ async function sendMail(input: EmailInput) {
       : undefined,
   });
 
-  await transporter.sendMail({
+  const result = await transporter.sendMail({
     from: process.env.SMTP_FROM ?? "조직 일정 관리 <no-reply@example.com>",
     ...input,
   });
+
+  console.info(
+    JSON.stringify({
+      event: "email.sent",
+      recipientDomain: input.to.split("@").at(-1),
+      subject: input.subject,
+      messageId: result.messageId,
+    }),
+  );
 }
 
 export function sendVerificationEmail(input: { email: string; url: string }) {
