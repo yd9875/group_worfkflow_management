@@ -6,7 +6,6 @@ import {
   getJoinCode,
   rejectJoinRequestAction,
   rotateJoinCodeAction,
-  transferOwnershipAction,
   updateDepartmentAction,
   updateMemberAction,
 } from "@/features/actions";
@@ -16,6 +15,103 @@ import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { SubmitButton } from "@/components/submit-button";
 
 const roleLabel = { OWNER: "소유자", ADMIN: "관리자", MEMBER: "구성원" };
+
+type AdminData = Awaited<ReturnType<typeof getAdminData>>;
+type AdminMember = AdminData["members"][number];
+
+function MemberEditForm({
+  data,
+  member,
+  compact = false,
+}: {
+  data: AdminData;
+  member: AdminMember;
+  compact?: boolean;
+}) {
+  const canManageRoles = data.currentMembership.role === "OWNER";
+  if (!canManageRoles && member.role === "OWNER") {
+    return (
+      <p className="muted text-sm">
+        소유자 정보는 소유자만 변경할 수 있습니다.
+      </p>
+    );
+  }
+  const successors = data.members.filter(
+    (candidate) =>
+      candidate.id !== member.id &&
+      candidate.status === "ACTIVE" &&
+      candidate.role !== "OWNER",
+  );
+  const departmentSelect = (
+    <select
+      aria-label="부서"
+      className={compact ? "field w-auto min-w-32" : "field"}
+      name="departmentId"
+      defaultValue={member.departmentId}
+    >
+      {data.departments.map((department) => (
+        <option key={department.id} value={department.id}>
+          {department.name}
+        </option>
+      ))}
+    </select>
+  );
+  const roleSelect = canManageRoles ? (
+    <select
+      aria-label="역할"
+      className={compact ? "field w-auto min-w-28" : "field"}
+      name="role"
+      defaultValue={member.role}
+    >
+      <option value="MEMBER">구성원</option>
+      <option value="ADMIN">관리자</option>
+      <option value="OWNER">소유자</option>
+    </select>
+  ) : (
+    <input type="hidden" name="role" value={member.role} />
+  );
+  const successorSelect =
+    canManageRoles && member.role === "OWNER" ? (
+      <select
+        aria-label="새 소유자"
+        className={compact ? "field w-auto min-w-40" : "field"}
+        name="successorMembershipId"
+        defaultValue=""
+      >
+        <option value="">새 소유자 선택</option>
+        {successors.map((candidate) => (
+          <option key={candidate.id} value={candidate.id}>
+            {candidate.profileName?.trim() || candidate.user.name}
+          </option>
+        ))}
+      </select>
+    ) : null;
+
+  return (
+    <form
+      action={updateMemberAction}
+      className={compact ? "flex flex-wrap items-center gap-2" : "grid gap-3"}
+    >
+      <input type="hidden" name="organizationId" value={data.currentMembership.organizationId} />
+      <input type="hidden" name="membershipId" value={member.id} />
+      {compact ? departmentSelect : <label className="label">부서{departmentSelect}</label>}
+      {compact ? roleSelect : canManageRoles ? <label className="label">역할{roleSelect}</label> : roleSelect}
+      {successorSelect &&
+        (compact ? successorSelect : (
+          <label className="label">
+            새 소유자
+            {successorSelect}
+            <span className="muted text-xs">
+              소유자 역할을 관리자나 구성원으로 바꿀 때 선택하세요.
+            </span>
+          </label>
+        ))}
+      <SubmitButton className="btn btn-secondary" pendingLabel="저장 중…">
+        변경 저장
+      </SubmitButton>
+    </form>
+  );
+}
 
 export async function AdminPanel({
   organizationId,
@@ -123,12 +219,12 @@ export async function AdminPanel({
   return (
     <section>
       <p className="eyebrow">Organization management</p><h1 className="page-title mt-1">조직 관리</h1>
-      <p className="muted mt-2">구성원의 부서와 역할을 관리합니다. 소유자 역할은 변경할 수 없습니다.</p>
+      <p className="muted mt-2">구성원의 부서와 역할을 관리합니다. 소유자 역할을 변경할 때는 조직을 이어받을 새 소유자를 선택해야 합니다.</p>
       <div className="admin-member-table card mt-6 overflow-x-auto">
         <table className="w-full min-w-[48rem] border-collapse text-left text-sm">
           <thead className="bg-slate-50"><tr><th className="p-4">구성원</th><th className="p-4">현재 역할</th><th className="p-4">부서·역할 변경</th><th className="p-4">상태</th></tr></thead>
           <tbody className="divide-y divide-[var(--line)]">
-            {data.members.map((member) => <tr key={member.id}><td className="p-4"><b>{member.profileName?.trim() || member.user.name}</b><p className="muted mt-1">{member.user.email}</p></td><td className="p-4">{roleLabel[member.role]}</td><td className="p-4">{member.role === "OWNER" ? <span className="muted">소유자는 변경할 수 없습니다</span> : <div className="flex flex-wrap gap-2"><form action={updateMemberAction} className="flex gap-2"><input type="hidden" name="organizationId" value={organizationId} /><input type="hidden" name="membershipId" value={member.id} /><select className="field w-auto" name="departmentId" defaultValue={member.departmentId}>{data.departments.map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}</select><select className="field w-auto" name="role" defaultValue={member.role}><option value="MEMBER">구성원</option><option value="ADMIN">관리자</option></select><SubmitButton className="btn btn-secondary" pendingLabel="저장 중…">저장</SubmitButton></form>{data.currentMembership.role === "OWNER" && <form action={transferOwnershipAction}><input type="hidden" name="organizationId" value={organizationId} /><input type="hidden" name="membershipId" value={member.id} /><ConfirmSubmitButton className="btn btn-danger" message={`${member.profileName?.trim() || member.user.name} 님에게 조직 소유권을 이전할까요? 이전 후 본인은 관리자가 됩니다.`}>소유권 이전</ConfirmSubmitButton></form>}</div>}</td><td className="p-4"><span className={`badge ${member.status === "ACTIVE" ? "badge-green" : "badge-gray"}`}>{member.status === "ACTIVE" ? "활성" : "비활성"}</span></td></tr>)}
+            {data.members.map((member) => <tr key={member.id}><td className="p-4"><b>{member.profileName?.trim() || member.user.name}</b><p className="muted mt-1">{member.user.email}</p></td><td className="p-4">{roleLabel[member.role]}</td><td className="p-4"><MemberEditForm compact data={data} member={member} /></td><td className="p-4"><span className={`badge ${member.status === "ACTIVE" ? "badge-green" : "badge-gray"}`}>{member.status === "ACTIVE" ? "활성" : "비활성"}</span></td></tr>)}
           </tbody>
         </table>
       </div>
@@ -139,26 +235,9 @@ export async function AdminPanel({
               <div><h2 className="font-extrabold">{member.profileName?.trim() || member.user.name}</h2><p className="muted mt-1 break-all text-sm">{member.user.email}</p></div>
               <span className="badge badge-gray">{roleLabel[member.role]}</span>
             </div>
-            {member.role === "OWNER" ? (
-              <p className="muted mt-4 text-sm">소유자는 변경할 수 없습니다.</p>
-            ) : (
-              <div className="mt-4 grid gap-3">
-                <form action={updateMemberAction} className="grid gap-3">
-                  <input type="hidden" name="organizationId" value={organizationId} />
-                  <input type="hidden" name="membershipId" value={member.id} />
-                  <label className="label">부서<select className="field" name="departmentId" defaultValue={member.departmentId}>{data.departments.map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}</select></label>
-                  <label className="label">역할<select className="field" name="role" defaultValue={member.role}><option value="MEMBER">구성원</option><option value="ADMIN">관리자</option></select></label>
-                  <SubmitButton className="btn btn-secondary" pendingLabel="저장 중…">변경 저장</SubmitButton>
-                </form>
-                {data.currentMembership.role === "OWNER" && (
-                  <form action={transferOwnershipAction}>
-                    <input type="hidden" name="organizationId" value={organizationId} />
-                    <input type="hidden" name="membershipId" value={member.id} />
-                    <ConfirmSubmitButton className="btn btn-danger w-full" message={`${member.profileName?.trim() || member.user.name} 님에게 조직 소유권을 이전할까요? 이전 후 본인은 관리자가 됩니다.`}>소유권 이전</ConfirmSubmitButton>
-                  </form>
-                )}
-              </div>
-            )}
+            <div className="mt-4">
+              <MemberEditForm data={data} member={member} />
+            </div>
           </article>
         ))}
       </div>

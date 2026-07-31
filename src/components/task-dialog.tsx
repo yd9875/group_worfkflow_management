@@ -19,11 +19,9 @@ export function TaskDialog({
 }) {
   const [open, setOpen] = useState(openInitially);
   const [scope, setScope] = useState("ORGANIZATION");
-  const [category, setCategory] = useState("GENERAL");
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const hideScope = category === "OUTING" || category === "LEAVE";
 
   function close() {
     setOpen(false);
@@ -49,7 +47,7 @@ export function TaskDialog({
 
   return (
     <>
-      <button className="btn btn-secondary" type="button" onClick={() => setOpen(true)}>
+      <button className="btn btn-primary" type="button" onClick={() => setOpen(true)}>
         <ClipboardPlus size={17} /> 업무 추가
       </button>
       {open && (
@@ -74,23 +72,13 @@ export function TaskDialog({
               <input type="hidden" name="organizationId" value={organizationId} />
               <label className="label">업무명<input className="field" name="title" maxLength={100} required autoFocus /></label>
               <label className="label">날짜<input className="field" name="date" type="date" defaultValue={defaultDate} required /></label>
-              <div className="grid gap-4 sm:grid-cols-2">
-                {!hideScope && (
-                  <label className="label">표시 위치
-                    <select className="field" name="scope" value={scope} onChange={(event) => setScope(event.target.value)}>
-                      <option value="ORGANIZATION">공통사항</option>
-                      <option value="DEPARTMENT">부서</option>
-                    </select>
-                  </label>
-                )}
-                <label className="label">분류
-                  <select className="field" name="category" value={category} onChange={(event) => setCategory(event.target.value)}>
-                    <option value="GENERAL">일반</option><option value="MEETING">회의</option><option value="TRAINING">교육</option>
-                    <option value="LEAVE">휴가</option><option value="BUSINESS_TRIP">출장</option><option value="OUTING">외근</option><option value="OTHER">기타</option>
-                  </select>
-                </label>
-              </div>
-              {!hideScope && scope === "DEPARTMENT" && (
+              <label className="label">표시 위치
+                <select className="field" name="scope" value={scope} onChange={(event) => setScope(event.target.value)}>
+                  <option value="ORGANIZATION">공통사항</option>
+                  <option value="DEPARTMENT">부서</option>
+                </select>
+              </label>
+              {scope === "DEPARTMENT" && (
                 <label className="label">대상 부서
                   <select className="field" name="departmentId" required>
                     <option value="">선택하세요</option>

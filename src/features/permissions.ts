@@ -64,7 +64,9 @@ export function canEditSchedule(
   if (!canViewSchedule(member, schedule)) return false;
   if (isManager(member.role)) return true;
   if (
-    (schedule.category === "OUTING" || schedule.category === "LEAVE") &&
+    (schedule.category === "OUTING" ||
+      schedule.category === "LEAVE" ||
+      schedule.category === "BUSINESS_TRIP") &&
     schedule.createdByUserId === member.userId
   ) {
     return true;
@@ -85,5 +87,5 @@ export function roleCanManageRole(
   next: OrganizationRole,
 ) {
   if (actor !== "OWNER") return false;
-  return current !== "OWNER" && next !== "OWNER";
+  return current !== next;
 }

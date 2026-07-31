@@ -30,7 +30,13 @@ const findMembership = cache(async (userId: string, organizationId: string) =>
       profileName: true,
       user: { select: { id: true, name: true, email: true } },
       organization: {
-        select: { id: true, name: true, description: true, timezone: true },
+        select: {
+          id: true,
+          name: true,
+          description: true,
+          timezone: true,
+          joinCodeCiphertext: true,
+        },
       },
       department: {
         select: { id: true, name: true, isSystem: true, isActive: true },

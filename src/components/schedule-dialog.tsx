@@ -27,7 +27,10 @@ export function ScheduleDialog({
   const searchParams = useSearchParams();
   const start = `${defaultDate}T09:00`;
   const end = `${defaultDate}T10:00`;
-  const hideScope = category === "OUTING" || category === "LEAVE";
+  const hideScope =
+    category === "OUTING" ||
+    category === "LEAVE" ||
+    category === "BUSINESS_TRIP";
 
   function close() {
     setOpen(false);

@@ -34,11 +34,14 @@ describe("일정 권한", () => {
   it("본인이 만든 소속 부서 일정은 수정할 수 있다", () => {
     expect(canEditSchedule(member, { ...baseSchedule, scope: "DEPARTMENT", departmentId: "d1" })).toBe(true);
   });
-  it("본인이 등록한 외근·휴가는 구성원도 삭제할 수 있다", () => {
+  it("본인이 등록한 외근·출장·휴가는 구성원도 삭제할 수 있다", () => {
     expect(canEditSchedule(member, { ...baseSchedule, category: "OUTING" })).toBe(true);
+    expect(canEditSchedule(member, { ...baseSchedule, category: "BUSINESS_TRIP" })).toBe(true);
   });
-  it("소유자만 관리자를 지정한다", () => {
+  it("소유자만 구성원의 역할과 소유권을 변경한다", () => {
     expect(roleCanManageRole("ADMIN", "MEMBER", "ADMIN")).toBe(false);
     expect(roleCanManageRole("OWNER", "MEMBER", "ADMIN")).toBe(true);
+    expect(roleCanManageRole("OWNER", "OWNER", "ADMIN")).toBe(true);
+    expect(roleCanManageRole("OWNER", "ADMIN", "OWNER")).toBe(true);
   });
 });

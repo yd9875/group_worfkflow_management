@@ -32,7 +32,11 @@ function text(formData: FormData, key: string) {
 }
 
 function isSpecialScheduleCategory(category: string) {
-  return category === "OUTING" || category === "LEAVE";
+  return (
+    category === "OUTING" ||
+    category === "LEAVE" ||
+    category === "BUSINESS_TRIP"
+  );
 }
 
 export async function createOrganizationAction(formData: FormData) {
@@ -259,15 +263,6 @@ export async function createTaskAction(formData: FormData) {
       description: z.string().trim().max(2000).optional(),
       date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
       scope: z.enum(["ORGANIZATION", "DEPARTMENT"]),
-      category: z.enum([
-        "GENERAL",
-        "MEETING",
-        "TRAINING",
-        "LEAVE",
-        "BUSINESS_TRIP",
-        "OUTING",
-        "OTHER",
-      ]),
       departmentId: z.string().uuid().nullable(),
       isImportant: z.boolean(),
     })
@@ -275,17 +270,11 @@ export async function createTaskAction(formData: FormData) {
       title: text(formData, "title"),
       description: text(formData, "description") || undefined,
       date: text(formData, "date"),
-      scope: isSpecialScheduleCategory(text(formData, "category"))
-        ? "ORGANIZATION"
-        : text(formData, "scope"),
-      category: text(formData, "category"),
-      departmentId: isSpecialScheduleCategory(text(formData, "category"))
-        ? null
-        : text(formData, "departmentId") || null,
+      scope: text(formData, "scope"),
+      departmentId: text(formData, "departmentId") || null,
       isImportant: formData.get("isImportant") === "on",
     });
-  const specialCategory = isSpecialScheduleCategory(input.category);
-  if (!specialCategory && !canCreateSchedule(membership, input.scope, input)) {
+  if (!canCreateSchedule(membership, input.scope, input)) {
     throw new AppError("FORBIDDEN", "이 위치에 업무를 등록할 권한이 없습니다.", 403);
   }
   if (input.scope === "DEPARTMENT") {
@@ -320,7 +309,7 @@ export async function createTaskAction(formData: FormData) {
         endsAt,
         isAllDay: true,
         scope: input.scope,
-        category: input.category,
+        category: "GENERAL",
         isImportant: input.isImportant,
         departmentId: input.scope === "DEPARTMENT" ? input.departmentId : null,
         targetUserId: null,
@@ -652,8 +641,13 @@ export async function updateMemberAction(formData: FormData) {
     where: { id: membershipId, organizationId },
   });
   if (!member) throw new AppError("NOT_FOUND", "구성원을 찾지 못했습니다.", 404);
-  const nextRole = text(formData, "role") as "OWNER" | "ADMIN" | "MEMBER";
+  const nextRole = z
+    .enum(["OWNER", "ADMIN", "MEMBER"])
+    .parse(text(formData, "role"));
   const nextDepartmentId = text(formData, "departmentId");
+  if (member.role === "OWNER" && actor.role !== "OWNER") {
+    throw new AppError("FORBIDDEN", "소유자의 정보는 소유자만 변경할 수 있습니다.", 403);
+  }
   if (nextRole !== member.role && !roleCanManageRole(actor.role, member.role, nextRole)) {
     throw new AppError("FORBIDDEN", "역할을 변경할 권한이 없습니다.", 403);
   }
@@ -661,6 +655,103 @@ export async function updateMemberAction(formData: FormData) {
     where: { id: nextDepartmentId, organizationId, isActive: true },
   });
   if (!department) throw new AppError("VALIDATION_ERROR", "부서를 확인해 주세요.");
+
+  if (member.role === "OWNER" && nextRole !== "OWNER") {
+    if (member.id !== actor.id) {
+      throw new AppError("FORBIDDEN", "본인의 소유자 역할만 이전할 수 있습니다.", 403);
+    }
+    const successorMembershipId = text(formData, "successorMembershipId");
+    const successor = await prisma.membership.findFirst({
+      where: {
+        id: successorMembershipId,
+        organizationId,
+        status: "ACTIVE",
+        userId: { not: member.userId },
+      },
+      select: { id: true, userId: true },
+    });
+    if (!successor) {
+      throw new AppError(
+        "VALIDATION_ERROR",
+        "소유자 역할을 변경하려면 새 소유자를 선택해 주세요.",
+      );
+    }
+    await prisma.$transaction([
+      prisma.membership.update({
+        where: { id: member.id },
+        data: { role: nextRole, departmentId: nextDepartmentId },
+      }),
+      prisma.membership.update({
+        where: { id: successor.id },
+        data: { role: "OWNER" },
+      }),
+      prisma.notification.create({
+        data: {
+          userId: successor.userId,
+          organizationId,
+          type: "OWNERSHIP_TRANSFERRED",
+          title: "조직 소유권을 이전받았습니다",
+          body: `${actor.organization.name}의 새 소유자가 되었습니다.`,
+          resourceType: "ORGANIZATION",
+          resourceId: organizationId,
+        },
+      }),
+      prisma.auditLog.create({
+        data: {
+          organizationId,
+          actorUserId: actor.userId,
+          action: "OWNERSHIP_TRANSFERRED",
+          entityType: "MEMBERSHIP",
+          entityId: successor.id,
+          metadataJson: {
+            previousOwnerRole: nextRole,
+            nextOwnerUserId: successor.userId,
+          },
+        },
+      }),
+    ]);
+    revalidatePath(`/org/${organizationId}/admin/members`);
+    revalidatePath("/organizations");
+    return;
+  }
+
+  if (member.role !== "OWNER" && nextRole === "OWNER") {
+    await prisma.$transaction([
+      prisma.membership.update({
+        where: { id: member.id },
+        data: { role: "OWNER", departmentId: nextDepartmentId },
+      }),
+      prisma.membership.update({
+        where: { id: actor.id },
+        data: { role: "ADMIN" },
+      }),
+      prisma.notification.create({
+        data: {
+          userId: member.userId,
+          organizationId,
+          type: "OWNERSHIP_TRANSFERRED",
+          title: "조직 소유권을 이전받았습니다",
+          body: `${actor.organization.name}의 새 소유자가 되었습니다.`,
+          resourceType: "ORGANIZATION",
+          resourceId: organizationId,
+        },
+      }),
+      prisma.auditLog.create({
+        data: {
+          organizationId,
+          actorUserId: actor.userId,
+          action: "OWNERSHIP_TRANSFERRED",
+          entityType: "MEMBERSHIP",
+          entityId: member.id,
+          metadataJson: { nextOwnerUserId: member.userId },
+        },
+      }),
+    ]);
+    revalidatePath(`/org/${organizationId}/admin/members`);
+    revalidatePath("/organizations");
+    return;
+  }
+
   await prisma.$transaction([
     prisma.membership.update({
       where: { id: member.id },

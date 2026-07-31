@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { endOfMonth, endOfWeek, startOfMonth, startOfWeek } from "date-fns";
 import { cache } from "react";
 import { prisma } from "@/lib/db";
+import { decryptJoinCode } from "@/lib/join-code";
 import { requireMembership, requireUser } from "@/lib/session";
 import { isManager } from "@/features/permissions";
 
@@ -26,7 +27,8 @@ export const getOrganizationShellContext = cache(async (organizationId: string) 
   const unreadCount = await prisma.notification.count({
     where: { userId: membership.userId, organizationId, readAt: null },
   });
-  return { membership, unreadCount };
+  const joinCode = decryptJoinCode(membership.organization.joinCodeCiphertext);
+  return { membership, unreadCount, joinCode };
 });
 
 export const getScheduleContext = cache(async (organizationId: string) => {

@@ -11,11 +11,13 @@ export default async function OrganizationLayout({
   params: Promise<{ organizationId: string }>;
 }) {
   const { organizationId } = await params;
-  const { membership, unreadCount } = await getOrganizationShellContext(organizationId);
+  const { membership, unreadCount, joinCode } =
+    await getOrganizationShellContext(organizationId);
   return (
     <AppShell
       organizationId={organizationId}
       organizationName={membership.organization.name}
+      joinCode={joinCode}
       userName={membership.profileName?.trim() || membership.user.name}
       role={membership.role}
       unreadCount={unreadCount}
