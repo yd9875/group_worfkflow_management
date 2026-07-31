@@ -1,5 +1,5 @@
 import { AppShell } from "@/components/app-shell";
-import { getOrganizationContext } from "@/features/queries";
+import { getOrganizationShellContext } from "@/features/queries";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +11,7 @@ export default async function OrganizationLayout({
   params: Promise<{ organizationId: string }>;
 }) {
   const { organizationId } = await params;
-  const { membership, unreadCount } = await getOrganizationContext(organizationId);
+  const { membership, unreadCount } = await getOrganizationShellContext(organizationId);
   return (
     <AppShell
       organizationId={organizationId}

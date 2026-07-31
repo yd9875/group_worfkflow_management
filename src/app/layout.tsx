@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { GlobalLoadingProvider } from "@/components/global-loading";
+import {
+  GlobalLoadingProvider,
+  GlobalLoadingRouteReset,
+} from "@/components/global-loading";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -19,9 +22,12 @@ export default function RootLayout({
   return (
     <html lang="ko" className="h-full">
       <body className="min-h-full">
-        <Suspense fallback={children}>
-          <GlobalLoadingProvider>{children}</GlobalLoadingProvider>
-        </Suspense>
+        <GlobalLoadingProvider>
+          {children}
+          <Suspense fallback={null}>
+            <GlobalLoadingRouteReset />
+          </Suspense>
+        </GlobalLoadingProvider>
       </body>
     </html>
   );

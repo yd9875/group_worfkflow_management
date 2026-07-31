@@ -25,9 +25,8 @@ export type ScheduleItem = {
 type Row = {
   id: string;
   label: string;
-  kind: "common" | "external" | "leave" | "department" | "member";
+  kind: "common" | "external" | "leave" | "department";
   departmentId?: string;
-  userId?: string;
 };
 
 const categoryLabel: Record<string, string> = {
@@ -42,14 +41,11 @@ const categoryLabel: Record<string, string> = {
 const externalCategories = new Set(["OUTING", "BUSINESS_TRIP", "TRAINING"]);
 
 function belongsToRow(schedule: ScheduleItem, row: Row) {
-  if (schedule.itemType === "TASK") {
-    return row.kind === "member" && schedule.targetUserId === row.userId;
-  }
   if (schedule.category === "LEAVE") return row.kind === "leave";
   if (externalCategories.has(schedule.category)) return row.kind === "external";
   if (schedule.scope === "ORGANIZATION") return row.kind === "common";
   if (schedule.scope === "DEPARTMENT") return row.kind === "department" && schedule.departmentId === row.departmentId;
-  return row.kind === "member" && schedule.targetUserId === row.userId;
+  return false;
 }
 
 function occursOnDay(schedule: ScheduleItem, day: Date) {
@@ -64,7 +60,7 @@ function itemSummary(schedule: ScheduleItem, rowKind?: Row["kind"]) {
     const name = schedule.targetUserName || schedule.creatorProfileName;
     return `${categoryLabel[schedule.category]}${name ? ` · ${name}` : ""}`;
   }
-  if (schedule.itemType === "TASK") return `업무 · ${schedule.title}`;
+  if (schedule.itemType === "TASK") return schedule.title;
   return `${!schedule.isAllDay ? `${format(schedule.startsAt, "HH:mm")} ` : ""}${schedule.title}`;
 }
 
@@ -101,34 +97,23 @@ export function WeekBoard({
   organizationId,
   days,
   departments,
-  members,
   schedules,
 }: {
   organizationId: string;
   days: Date[];
   departments: Array<{ id: string; name: string; isSystem: boolean }>;
-  members: Array<{ userId: string; name: string; departmentId: string }>;
   schedules: ScheduleItem[];
 }) {
   const rows: Row[] = [
     { id: "common", label: "공통사항", kind: "common" },
+    ...departments.filter((department) => !department.isSystem).map((department) => ({
+      id: `department-${department.id}`,
+      label: department.name,
+      kind: "department" as const,
+      departmentId: department.id,
+    })),
     { id: "external", label: "외부 업무", kind: "external" },
     { id: "leave", label: "휴가", kind: "leave" },
-    ...departments.filter((department) => !department.isSystem).flatMap((department) => [
-      { id: `department-${department.id}`, label: department.name, kind: "department" as const, departmentId: department.id },
-      ...members.filter((member) => member.departmentId === department.id).map((member) => ({
-        id: `member-${member.userId}`, label: `└ ${member.name}`, kind: "member" as const, userId: member.userId, departmentId: department.id,
-      })),
-    ]),
-    ...departments.filter((department) => department.isSystem).flatMap((department) =>
-      members.filter((member) => member.departmentId === department.id).map((member) => ({
-        id: `member-${member.userId}`,
-        label: member.name,
-        kind: "member" as const,
-        userId: member.userId,
-        departmentId: department.id,
-      })),
-    ),
   ];
   return (
     <div className="schedule-scroll" aria-label="주간 일정표">
@@ -137,7 +122,7 @@ export function WeekBoard({
         {days.map((day) => <div key={day.toISOString()} className={`week-cell week-head grid place-items-center ${isToday(day) ? "today" : ""}`}><span className="text-sm font-extrabold">{format(day, "M.d")}</span><span className="muted text-xs">{format(day, "EEE", { locale: ko })}</span></div>)}
         {rows.map((row) => (
           <div key={row.id} className="contents">
-            <div className={`week-cell week-label flex items-center font-bold ${row.kind === "member" ? "pl-5 text-sm text-slate-600" : ""}`}>{row.label}</div>
+            <div className="week-cell week-label flex items-center font-bold">{row.label}</div>
             {days.map((day) => {
               const items = schedules.filter((schedule) => belongsToRow(schedule, row) && occursOnDay(schedule, day));
               return <div key={`${row.id}-${day.toISOString()}`} className={`week-cell ${isToday(day) ? "today" : ""}`}>{items.slice(0, 3).map((schedule) => <Item key={schedule.id} schedule={schedule} organizationId={organizationId} rowKind={row.kind} />)}{items.length > 3 && <span className="muted px-1 text-xs font-bold">+{items.length - 3}개</span>}</div>;

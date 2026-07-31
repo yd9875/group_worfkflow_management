@@ -17,7 +17,10 @@ export default async function OrganizationsPage() {
   const organizations = await listMyOrganizations();
   const pending = await prisma.joinRequest.findMany({
     where: { userId: user.id, status: "PENDING" },
-    include: { organization: true },
+    select: {
+      id: true,
+      organization: { select: { name: true } },
+    },
     orderBy: { requestedAt: "desc" },
   });
 

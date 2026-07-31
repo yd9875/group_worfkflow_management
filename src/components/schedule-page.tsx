@@ -2,7 +2,7 @@ import Link from "next/link";
 import { addDays, addMonths, addWeeks, eachDayOfInterval, endOfMonth, endOfWeek, format, startOfMonth, startOfWeek } from "date-fns";
 import { ko } from "date-fns/locale";
 import { CalendarDays, ChevronLeft, ChevronRight, Printer } from "lucide-react";
-import { getOrganizationContext, listSchedules } from "@/features/queries";
+import { getScheduleContext, listSchedules } from "@/features/queries";
 import { MonthBoard, ScheduleItem, WeekBoard } from "@/components/schedule-board";
 import { ScheduleDialog } from "@/components/schedule-dialog";
 import { TaskDialog } from "@/components/task-dialog";
@@ -19,7 +19,7 @@ export async function SchedulePage({
   search: Search;
 }) {
   const selectedDate = search.date && /^\d{4}-\d{2}-\d{2}$/.test(search.date) ? new Date(`${search.date}T12:00:00`) : new Date();
-  const context = await getOrganizationContext(organizationId);
+  const context = await getScheduleContext(organizationId);
   const schedules = await listSchedules({
     organizationId,
     date: selectedDate,
@@ -81,11 +81,11 @@ export async function SchedulePage({
           <Link className="btn btn-secondary" href={`/org/${organizationId}/schedule/${view}`}>오늘로</Link>
           <Link className="btn btn-secondary" href={`/org/${organizationId}/print?${querySuffix(selectedDate)}`}><Printer size={17} /> 인쇄/PDF</Link>
           <ScheduleDialog key={`schedule-${search.new ?? "closed"}`} organizationId={organizationId} departments={context.departments.filter((department) => !department.isSystem).map(({ id, name }) => ({ id, name }))} defaultDate={format(selectedDate, "yyyy-MM-dd")} openInitially={search.new === "schedule" || search.new === "1"} />
-          <TaskDialog key={`task-${search.new ?? "closed"}`} organizationId={organizationId} defaultDate={format(selectedDate, "yyyy-MM-dd")} openInitially={search.new === "task"} />
+          <TaskDialog key={`task-${search.new ?? "closed"}`} organizationId={organizationId} departments={context.departments.filter((department) => !department.isSystem).map(({ id, name }) => ({ id, name }))} defaultDate={format(selectedDate, "yyyy-MM-dd")} openInitially={search.new === "task"} />
         </div>
       </header>
       {view === "week" ? (
-        <WeekBoard organizationId={organizationId} days={weekDays} departments={context.departments.map(({ id, name, isSystem }) => ({ id, name, isSystem }))} members={context.members.map((member) => ({ userId: member.user.id, name: member.profileName?.trim() || member.user.name, departmentId: member.departmentId }))} schedules={serialized} />
+        <WeekBoard organizationId={organizationId} days={weekDays} departments={context.departments.map(({ id, name, isSystem }) => ({ id, name, isSystem }))} schedules={serialized} />
       ) : (
         <MonthBoard organizationId={organizationId} days={monthDays} currentMonth={selectedDate.getMonth()} schedules={serialized} />
       )}

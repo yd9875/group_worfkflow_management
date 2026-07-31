@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useActionState, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ClipboardPlus, X } from "lucide-react";
 import { createTaskAction } from "@/features/actions";
@@ -8,17 +8,22 @@ import { SubmitButton } from "@/components/submit-button";
 
 export function TaskDialog({
   organizationId,
+  departments,
   defaultDate,
   openInitially = false,
 }: {
   organizationId: string;
+  departments: Array<{ id: string; name: string }>;
   defaultDate: string;
   openInitially?: boolean;
 }) {
   const [open, setOpen] = useState(openInitially);
+  const [scope, setScope] = useState("ORGANIZATION");
+  const [category, setCategory] = useState("GENERAL");
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const hideScope = category === "OUTING" || category === "LEAVE";
 
   function close() {
     setOpen(false);
@@ -28,6 +33,19 @@ export function TaskDialog({
       router.replace(next.size ? `${pathname}?${next}` : pathname, { scroll: false });
     }
   }
+
+  const [formError, formAction] = useActionState(
+    async (_previous: string | null, formData: FormData) => {
+      try {
+        await createTaskAction(formData);
+        close();
+        return null;
+      } catch {
+        return "업무를 등록하지 못했습니다. 입력값과 권한을 확인해 주세요.";
+      }
+    },
+    null,
+  );
 
   return (
     <>
@@ -52,11 +70,36 @@ export function TaskDialog({
                 <X size={20} />
               </button>
             </header>
-            <form className="mt-6 grid gap-4" action={createTaskAction}>
+            <form className="mt-6 grid gap-4" action={formAction}>
               <input type="hidden" name="organizationId" value={organizationId} />
               <label className="label">업무명<input className="field" name="title" maxLength={100} required autoFocus /></label>
               <label className="label">날짜<input className="field" name="date" type="date" defaultValue={defaultDate} required /></label>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {!hideScope && (
+                  <label className="label">표시 위치
+                    <select className="field" name="scope" value={scope} onChange={(event) => setScope(event.target.value)}>
+                      <option value="ORGANIZATION">공통사항</option>
+                      <option value="DEPARTMENT">부서</option>
+                    </select>
+                  </label>
+                )}
+                <label className="label">분류
+                  <select className="field" name="category" value={category} onChange={(event) => setCategory(event.target.value)}>
+                    <option value="GENERAL">일반</option><option value="MEETING">회의</option><option value="TRAINING">교육</option>
+                    <option value="LEAVE">휴가</option><option value="BUSINESS_TRIP">출장</option><option value="OUTING">외근</option><option value="OTHER">기타</option>
+                  </select>
+                </label>
+              </div>
+              {!hideScope && scope === "DEPARTMENT" && (
+                <label className="label">대상 부서
+                  <select className="field" name="departmentId" required>
+                    <option value="">선택하세요</option>
+                    {departments.map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}
+                  </select>
+                </label>
+              )}
               <label className="label">설명<textarea className="field" name="description" maxLength={2000} /></label>
+              {formError && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">{formError}</p>}
               <label className="flex items-center gap-2 text-sm">
                 <input type="checkbox" name="isImportant" className="size-4 accent-[var(--accent)]" /> 중요 업무
               </label>

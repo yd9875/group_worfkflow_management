@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { addDays, format, startOfWeek } from "date-fns";
-import { getOrganizationContext, listSchedules } from "@/features/queries";
+import { getScheduleContext, listSchedules } from "@/features/queries";
 import { WeekBoard, type ScheduleItem } from "@/components/schedule-board";
 import { PrintButton } from "@/components/print-button";
 
@@ -15,7 +15,7 @@ export default async function PrintPage({
   const selectedDate = search.date ? new Date(`${search.date}T12:00:00`) : new Date();
   const weekStart = startOfWeek(selectedDate, { weekStartsOn: 1 });
   const days = Array.from({ length: 7 }, (_, index) => addDays(weekStart, index));
-  const context = await getOrganizationContext(organizationId);
+  const context = await getScheduleContext(organizationId);
   const schedules = await listSchedules({
     organizationId,
     date: selectedDate,
@@ -63,7 +63,7 @@ export default async function PrintPage({
           <PrintButton />
         </div>
       </header>
-      <WeekBoard organizationId={organizationId} days={days} departments={context.departments.map(({ id, name, isSystem }) => ({ id, name, isSystem }))} members={context.members.map((member) => ({ userId: member.user.id, name: member.profileName?.trim() || member.user.name, departmentId: member.departmentId }))} schedules={items} />
+      <WeekBoard organizationId={organizationId} days={days} departments={context.departments.map(({ id, name, isSystem }) => ({ id, name, isSystem }))} schedules={items} />
     </section>
   );
 }

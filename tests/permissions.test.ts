@@ -19,6 +19,7 @@ const baseSchedule = {
   targetUserId: null,
   departmentId: null,
   scope: "ORGANIZATION" as const,
+  category: "GENERAL" as const,
   deletedAt: null,
 };
 
@@ -32,6 +33,9 @@ describe("일정 권한", () => {
   });
   it("본인이 만든 소속 부서 일정은 수정할 수 있다", () => {
     expect(canEditSchedule(member, { ...baseSchedule, scope: "DEPARTMENT", departmentId: "d1" })).toBe(true);
+  });
+  it("본인이 등록한 외근·휴가는 구성원도 삭제할 수 있다", () => {
+    expect(canEditSchedule(member, { ...baseSchedule, category: "OUTING" })).toBe(true);
   });
   it("소유자만 관리자를 지정한다", () => {
     expect(roleCanManageRole("ADMIN", "MEMBER", "ADMIN")).toBe(false);

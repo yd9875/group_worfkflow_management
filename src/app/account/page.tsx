@@ -14,12 +14,20 @@ export default async function AccountPage() {
   const [ownedOrganizations, activeMemberships] = await Promise.all([
     prisma.membership.findMany({
       where: { userId: user.id, role: "OWNER", status: "ACTIVE" },
-      include: { organization: true },
+      select: {
+        organizationId: true,
+        organization: { select: { name: true } },
+      },
       orderBy: { joinedAt: "asc" },
     }),
     prisma.membership.findMany({
       where: { userId: user.id, status: "ACTIVE" },
-      include: { organization: true },
+      select: {
+        id: true,
+        organizationId: true,
+        profileName: true,
+        organization: { select: { name: true } },
+      },
       orderBy: { joinedAt: "asc" },
     }),
   ]);

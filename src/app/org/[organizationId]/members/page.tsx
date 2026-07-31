@@ -1,5 +1,5 @@
 import { Search, Users } from "lucide-react";
-import { getOrganizationContext } from "@/features/queries";
+import { getMembersData } from "@/features/queries";
 
 const roleLabel = { OWNER: "소유자", ADMIN: "관리자", MEMBER: "구성원" };
 
@@ -9,7 +9,7 @@ export default async function MembersPage({
   params: Promise<{ organizationId: string }>;
 }) {
   const { organizationId } = await params;
-  const { members } = await getOrganizationContext(organizationId);
+  const members = await getMembersData(organizationId);
   return (
     <section>
       <p className="eyebrow">People</p><h1 className="page-title mt-1">구성원</h1>

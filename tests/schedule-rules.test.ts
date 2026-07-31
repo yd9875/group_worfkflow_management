@@ -19,6 +19,15 @@ describe("일정 입력 검증", () => {
   it("부서 일정은 부서가 필요하다", () => {
     expect(scheduleInputSchema.safeParse({ ...base, scope: "DEPARTMENT" }).success).toBe(false);
   });
+  it("인증 시스템의 UUID가 아닌 사용자 ID도 개인 일정 대상으로 허용한다", () => {
+    expect(
+      scheduleInputSchema.safeParse({
+        ...base,
+        scope: "PERSONAL",
+        targetUserId: "better-auth-user-id",
+      }).success,
+    ).toBe(true);
+  });
   it("배타적 종료값으로 기간 겹침을 계산한다", () => {
     expect(overlaps(new Date("2026-07-30"), new Date("2026-07-31"), new Date("2026-07-31"), new Date("2026-08-01"))).toBe(false);
   });

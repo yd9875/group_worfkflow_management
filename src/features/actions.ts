@@ -31,6 +31,10 @@ function text(formData: FormData, key: string) {
   return typeof value === "string" ? value : "";
 }
 
+function isSpecialScheduleCategory(category: string) {
+  return category === "OUTING" || category === "LEAVE";
+}
+
 export async function createOrganizationAction(formData: FormData) {
   const user = await requireUser();
   const input = organizationSchema.parse({
@@ -163,7 +167,9 @@ async function scheduleRecipients(
 export async function createScheduleAction(formData: FormData) {
   const organizationId = text(formData, "organizationId");
   const membership = await requireMembership(organizationId);
-  const scope = text(formData, "scope");
+  const category = text(formData, "category");
+  const specialCategory = isSpecialScheduleCategory(category);
+  const scope = specialCategory ? "ORGANIZATION" : text(formData, "scope");
   const parsed = scheduleInputSchema.parse({
     organizationId,
     title: text(formData, "title"),
@@ -172,12 +178,12 @@ export async function createScheduleAction(formData: FormData) {
     endsAt: text(formData, "endsAt"),
     isAllDay: formData.get("isAllDay") === "on",
     scope,
-    category: text(formData, "category"),
+    category,
     isImportant: formData.get("isImportant") === "on",
-    departmentId: text(formData, "departmentId") || null,
-    targetUserId: scope === "PERSONAL" ? membership.userId : null,
+    departmentId: specialCategory ? null : text(formData, "departmentId") || null,
+    targetUserId: null,
   });
-  if (!canCreateSchedule(membership, parsed.scope, parsed)) {
+  if (!specialCategory && !canCreateSchedule(membership, parsed.scope, parsed)) {
     throw new AppError("FORBIDDEN", "이 범위의 일정을 등록할 권한이 없습니다.", 403);
   }
 
@@ -252,14 +258,52 @@ export async function createTaskAction(formData: FormData) {
       title: z.string().trim().min(1).max(100),
       description: z.string().trim().max(2000).optional(),
       date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      scope: z.enum(["ORGANIZATION", "DEPARTMENT"]),
+      category: z.enum([
+        "GENERAL",
+        "MEETING",
+        "TRAINING",
+        "LEAVE",
+        "BUSINESS_TRIP",
+        "OUTING",
+        "OTHER",
+      ]),
+      departmentId: z.string().uuid().nullable(),
       isImportant: z.boolean(),
     })
     .parse({
       title: text(formData, "title"),
       description: text(formData, "description") || undefined,
       date: text(formData, "date"),
+      scope: isSpecialScheduleCategory(text(formData, "category"))
+        ? "ORGANIZATION"
+        : text(formData, "scope"),
+      category: text(formData, "category"),
+      departmentId: isSpecialScheduleCategory(text(formData, "category"))
+        ? null
+        : text(formData, "departmentId") || null,
       isImportant: formData.get("isImportant") === "on",
     });
+  const specialCategory = isSpecialScheduleCategory(input.category);
+  if (!specialCategory && !canCreateSchedule(membership, input.scope, input)) {
+    throw new AppError("FORBIDDEN", "이 위치에 업무를 등록할 권한이 없습니다.", 403);
+  }
+  if (input.scope === "DEPARTMENT") {
+    if (!input.departmentId) {
+      throw new AppError("VALIDATION_ERROR", "업무를 표시할 부서를 선택해 주세요.");
+    }
+    const department = await prisma.department.findFirst({
+      where: {
+        id: input.departmentId,
+        organizationId,
+        isActive: true,
+        isSystem: false,
+      },
+    });
+    if (!department) {
+      throw new AppError("VALIDATION_ERROR", "대상 부서가 올바르지 않습니다.");
+    }
+  }
   const startsAt = new Date(`${input.date}T00:00:00+09:00`);
   const endsAt = new Date(startsAt.getTime() + 24 * 60 * 60 * 1000);
 
@@ -275,10 +319,11 @@ export async function createTaskAction(formData: FormData) {
         startsAt,
         endsAt,
         isAllDay: true,
-        scope: "PERSONAL",
-        category: "GENERAL",
+        scope: input.scope,
+        category: input.category,
         isImportant: input.isImportant,
-        targetUserId: membership.userId,
+        departmentId: input.scope === "DEPARTMENT" ? input.departmentId : null,
+        targetUserId: null,
       },
     });
     await tx.auditLog.create({

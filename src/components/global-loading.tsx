@@ -8,20 +8,18 @@ type LoadingContextValue = {
   stopLoading: () => void;
 };
 
-const LoadingContext = createContext<LoadingContextValue | null>(null);
+const LoadingContext = createContext<LoadingContextValue>({
+  startLoading: () => undefined,
+  stopLoading: () => undefined,
+});
 
 export function useGlobalLoading() {
-  const value = useContext(LoadingContext);
-  if (!value) throw new Error("GlobalLoadingProvider가 필요합니다.");
-  return value;
+  return useContext(LoadingContext);
 }
 
 export function GlobalLoadingProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-
   const stopLoading = useCallback(() => {
     if (timer.current) clearTimeout(timer.current);
     timer.current = null;
@@ -36,11 +34,6 @@ export function GlobalLoadingProvider({ children }: { children: React.ReactNode 
       setLoading(false);
     }, timeout);
   }, []);
-
-  useEffect(() => {
-    const routeTimer = setTimeout(stopLoading, 0);
-    return () => clearTimeout(routeTimer);
-  }, [pathname, searchParams, stopLoading]);
 
   useEffect(() => {
     function onClick(event: MouseEvent) {
@@ -78,4 +71,17 @@ export function GlobalLoadingProvider({ children }: { children: React.ReactNode 
       )}
     </LoadingContext.Provider>
   );
+}
+
+export function GlobalLoadingRouteReset() {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const { stopLoading } = useGlobalLoading();
+
+  useEffect(() => {
+    const routeTimer = setTimeout(stopLoading, 0);
+    return () => clearTimeout(routeTimer);
+  }, [pathname, searchParams, stopLoading]);
+
+  return null;
 }

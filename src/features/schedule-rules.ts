@@ -22,7 +22,7 @@ export const scheduleInputSchema = z
       .default("GENERAL"),
     isImportant: z.coerce.boolean().default(false),
     departmentId: z.string().uuid().nullable().optional(),
-    targetUserId: z.string().uuid().nullable().optional(),
+    targetUserId: z.string().trim().min(1).max(128).nullable().optional(),
   })
   .superRefine((value, context) => {
     if (value.endsAt <= value.startsAt) {

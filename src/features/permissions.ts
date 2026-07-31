@@ -18,7 +18,7 @@ type ScheduleIdentity = Pick<
   | "departmentId"
   | "scope"
   | "deletedAt"
->;
+> & { category?: Schedule["category"] };
 
 export function isManager(role: OrganizationRole) {
   return role === "OWNER" || role === "ADMIN";
@@ -63,6 +63,12 @@ export function canEditSchedule(
 ) {
   if (!canViewSchedule(member, schedule)) return false;
   if (isManager(member.role)) return true;
+  if (
+    (schedule.category === "OUTING" || schedule.category === "LEAVE") &&
+    schedule.createdByUserId === member.userId
+  ) {
+    return true;
+  }
   if (schedule.scope === "PERSONAL") {
     return schedule.targetUserId === member.userId;
   }
