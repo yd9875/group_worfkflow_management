@@ -4,18 +4,25 @@ import { DeleteAccountForm } from "@/components/delete-account-form";
 import { SignOutButton } from "@/components/sign-out-button";
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/session";
+import { updateOrganizationProfileAction } from "@/features/actions";
+import { SubmitButton } from "@/components/submit-button";
 
 export const dynamic = "force-dynamic";
 
 export default async function AccountPage() {
   const user = await requireUser();
-  const ownedOrganizations = await prisma.membership.findMany({
-    where: { userId: user.id, role: "OWNER", status: "ACTIVE" },
-    include: {
-      organization: true,
-    },
-    orderBy: { joinedAt: "asc" },
-  });
+  const [ownedOrganizations, activeMemberships] = await Promise.all([
+    prisma.membership.findMany({
+      where: { userId: user.id, role: "OWNER", status: "ACTIVE" },
+      include: { organization: true },
+      orderBy: { joinedAt: "asc" },
+    }),
+    prisma.membership.findMany({
+      where: { userId: user.id, status: "ACTIVE" },
+      include: { organization: true },
+      orderBy: { joinedAt: "asc" },
+    }),
+  ]);
   const organizations = await Promise.all(
     ownedOrganizations.map(async (membership) => ({
       id: membership.organizationId,
@@ -51,6 +58,40 @@ export default async function AccountPage() {
       </header>
 
       <section className="card mt-8 p-5 sm:p-6">
+        <div className="flex items-start gap-3">
+          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[var(--brand-soft)] text-[var(--brand)]">
+            <Building2 size={20} />
+          </span>
+          <div className="w-full min-w-0">
+            <h2 className="font-extrabold">프로필 설정</h2>
+            <p className="muted mt-1 text-sm leading-6">
+              일정표에 표시할 이름을 조직별로 설정할 수 있습니다. 비워 두면 계정 이름인 {user.name}이 표시됩니다.
+            </p>
+            <div className="mt-5 grid gap-4">
+              {activeMemberships.map((membership) => (
+                <form action={updateOrganizationProfileAction} className="rounded-xl border border-[var(--line)] p-4" key={membership.id}>
+                  <input type="hidden" name="organizationId" value={membership.organizationId} />
+                  <label className="label">
+                    {membership.organization.name}
+                    <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+                      <input
+                        className="field flex-1"
+                        name="profileName"
+                        defaultValue={membership.profileName ?? ""}
+                        maxLength={60}
+                        placeholder={user.name}
+                      />
+                      <SubmitButton className="btn btn-secondary shrink-0" pendingLabel="저장 중…">프로필명 저장</SubmitButton>
+                    </div>
+                  </label>
+                </form>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="card mt-5 p-5 sm:p-6">
         <div className="flex items-start gap-3">
           <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[var(--brand-soft)] text-[var(--brand)]">
             <ShieldCheck size={20} />

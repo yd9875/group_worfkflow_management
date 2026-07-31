@@ -7,8 +7,9 @@ import {
   Building2,
   CalendarDays,
   CalendarRange,
-  ChevronDown,
   ClipboardList,
+  ClipboardPlus,
+  House,
   Plus,
   Settings2,
   UserRoundCog,
@@ -36,6 +37,7 @@ export function AppShell({
   const pathname = usePathname();
   const root = `/org/${organizationId}`;
   const links = [
+    { href: "/organizations", label: "홈", icon: House },
     { href: `${root}/schedule/week`, label: "주간 일정", icon: CalendarRange },
     { href: `${root}/schedule/month`, label: "월간 일정", icon: CalendarDays },
     { href: `${root}/members`, label: "구성원", icon: Users },
@@ -51,13 +53,12 @@ export function AppShell({
           <span className="grid size-10 place-items-center rounded-xl bg-[var(--brand)] text-white"><CalendarDays size={20} /></span>
           <span className="font-extrabold tracking-[-.03em]">조직 일정 관리</span>
         </div>
-        <Link href="/organizations" className="sidebar-meta card mb-5 flex items-center justify-between gap-2 p-3">
+        <div className="sidebar-meta card mb-5 flex items-center gap-2 p-3">
           <span className="min-w-0">
             <span className="muted block text-[.68rem] font-bold">현재 조직</span>
             <span className="block truncate text-sm font-bold">{organizationName}</span>
           </span>
-          <ChevronDown size={16} className="muted shrink-0" />
-        </Link>
+        </div>
         <nav className="grid gap-1" aria-label="주 메뉴">
           {links.map(({ href, label, icon: Icon }) => (
             <Link key={href} className={`nav-link ${active(href) ? "nav-link-active" : ""}`} href={href}>
@@ -74,6 +75,11 @@ export function AppShell({
             <Link className={`nav-link ${active(`${root}/admin/members`) ? "nav-link-active" : ""}`} href={`${root}/admin/members`}><Settings2 size={18} /> 조직 관리</Link>
           </div>
         )}
+        {(role === "OWNER" || role === "ADMIN") && (
+          <Link className={`mobile-admin-link nav-link ${active(`${root}/admin/members`) ? "nav-link-active" : ""}`} href={`${root}/admin/members`}>
+            <Settings2 size={18} /> 조직 관리
+          </Link>
+        )}
         <div className="sidebar-meta mt-auto border-t border-[var(--line)] pt-3">
           <p className="px-3 py-2 text-sm font-bold">{userName} <span className="badge badge-gray ml-1">{role === "OWNER" ? "소유자" : role === "ADMIN" ? "관리자" : "구성원"}</span></p>
           <SignOutButton />
@@ -85,9 +91,14 @@ export function AppShell({
             <p className="muted text-xs font-bold">조직</p>
             <p className="font-extrabold tracking-[-.02em]">{organizationName}</p>
           </div>
-          <Link className="btn btn-primary" href={`${root}/schedule/week?new=1`}>
-            <Plus size={17} /> <span className="hidden sm:inline">일정 추가</span>
-          </Link>
+          <div className="flex gap-2">
+            <Link className="btn btn-primary" href={`${root}/schedule/week?new=schedule`}>
+              <Plus size={17} /> <span className="hidden sm:inline">일정 추가</span>
+            </Link>
+            <Link className="btn btn-secondary" href={`${root}/schedule/week?new=task`}>
+              <ClipboardPlus size={17} /> <span className="hidden sm:inline">업무 추가</span>
+            </Link>
+          </div>
         </header>
         <main className="content">{children}</main>
       </section>

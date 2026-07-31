@@ -20,12 +20,13 @@ export default async function PrintPage({
     organizationId,
     date: selectedDate,
     view: "week",
-    departments: search.department ? [search.department] : undefined,
-    scopes: search.scope ? [search.scope as "ORGANIZATION" | "DEPARTMENT" | "PERSONAL"] : undefined,
-    categories: search.category ? [search.category as never] : undefined,
-    important: search.important === "1",
-    search: search.q,
   });
+  const profileNames = new Map(
+    context.members.map((member) => [
+      member.userId,
+      member.profileName?.trim() || member.user.name,
+    ]),
+  );
   const items: ScheduleItem[] = schedules.map((schedule) => ({
     id: schedule.id,
     title: schedule.title,
@@ -36,17 +37,17 @@ export default async function PrintPage({
     scope: schedule.scope,
     category: schedule.category,
     isImportant: schedule.isImportant,
+    itemType: schedule.itemType,
     departmentId: schedule.departmentId,
     departmentName: schedule.department?.name ?? null,
     targetUserId: schedule.targetUserId,
-    targetUserName: schedule.targetUser?.name ?? null,
+    targetUserName: schedule.targetUserId
+      ? profileNames.get(schedule.targetUserId) ?? schedule.targetUser?.name ?? null
+      : null,
+    creatorProfileName: schedule.createdByUserId
+      ? profileNames.get(schedule.createdByUserId) ?? schedule.createdBy?.name ?? null
+      : null,
   }));
-  const filters = [
-    search.department ? "부서 필터 적용" : "모든 부서",
-    search.scope ? `범위 ${search.scope}` : "모든 범위",
-    search.category ? `분류 ${search.category}` : "모든 분류",
-    search.important === "1" ? "중요 일정만" : null,
-  ].filter(Boolean).join(" · ");
 
   return (
     <section>
@@ -54,7 +55,7 @@ export default async function PrintPage({
         <div>
           <p className="eyebrow">Printable schedule</p>
           <h1 className="page-title mt-1">{context.membership.organization.name} 주간 일정표</h1>
-          <p className="muted mt-2 text-sm">{format(weekStart, "yyyy.MM.dd")} – {format(addDays(weekStart, 6), "yyyy.MM.dd")} · {filters}</p>
+          <p className="muted mt-2 text-sm">{format(weekStart, "yyyy.MM.dd")} – {format(addDays(weekStart, 6), "yyyy.MM.dd")}</p>
           <p className="muted mt-1 text-xs">출력 시각 {new Date().toLocaleString("ko-KR")}</p>
         </div>
         <div className="no-print flex gap-2">
@@ -62,7 +63,7 @@ export default async function PrintPage({
           <PrintButton />
         </div>
       </header>
-      <WeekBoard organizationId={organizationId} days={days} departments={context.departments.map(({ id, name }) => ({ id, name }))} members={context.members.map(({ user, departmentId }) => ({ userId: user.id, name: user.name, departmentId }))} schedules={items} />
+      <WeekBoard organizationId={organizationId} days={days} departments={context.departments.map(({ id, name, isSystem }) => ({ id, name, isSystem }))} members={context.members.map((member) => ({ userId: member.user.id, name: member.profileName?.trim() || member.user.name, departmentId: member.departmentId }))} schedules={items} />
     </section>
   );
 }

@@ -2,6 +2,7 @@ import { format, isToday } from "date-fns";
 import { ko } from "date-fns/locale";
 import { Flag, Trash2 } from "lucide-react";
 import { deleteScheduleAction } from "@/features/actions";
+import { SubmitButton } from "@/components/submit-button";
 
 export type ScheduleItem = {
   id: string;
@@ -13,19 +14,40 @@ export type ScheduleItem = {
   scope: "ORGANIZATION" | "DEPARTMENT" | "PERSONAL";
   category: string;
   isImportant: boolean;
+  itemType: "SCHEDULE" | "TASK";
   departmentId: string | null;
   departmentName: string | null;
   targetUserId: string | null;
   targetUserName: string | null;
+  creatorProfileName: string | null;
 };
 
-type Row = { id: string; label: string; kind: "organization" | "department" | "member"; departmentId?: string; userId?: string };
+type Row = {
+  id: string;
+  label: string;
+  kind: "common" | "external" | "leave" | "department" | "member";
+  departmentId?: string;
+  userId?: string;
+};
 
-const scopeLabel = { ORGANIZATION: "조직", DEPARTMENT: "부서", PERSONAL: "개인" };
-const categoryLabel: Record<string, string> = { GENERAL: "일반", MEETING: "회의", TRAINING: "교육", LEAVE: "휴가", BUSINESS_TRIP: "출장", OUTING: "외출", OTHER: "기타" };
+const categoryLabel: Record<string, string> = {
+  GENERAL: "일반",
+  MEETING: "회의",
+  TRAINING: "교육",
+  LEAVE: "휴가",
+  BUSINESS_TRIP: "출장",
+  OUTING: "외근",
+  OTHER: "기타",
+};
+const externalCategories = new Set(["OUTING", "BUSINESS_TRIP", "TRAINING"]);
 
 function belongsToRow(schedule: ScheduleItem, row: Row) {
-  if (schedule.scope === "ORGANIZATION") return row.kind === "organization";
+  if (schedule.itemType === "TASK") {
+    return row.kind === "member" && schedule.targetUserId === row.userId;
+  }
+  if (schedule.category === "LEAVE") return row.kind === "leave";
+  if (externalCategories.has(schedule.category)) return row.kind === "external";
+  if (schedule.scope === "ORGANIZATION") return row.kind === "common";
   if (schedule.scope === "DEPARTMENT") return row.kind === "department" && schedule.departmentId === row.departmentId;
   return row.kind === "member" && schedule.targetUserId === row.userId;
 }
@@ -36,20 +58,39 @@ function occursOnDay(schedule: ScheduleItem, day: Date) {
   return schedule.startsAt < dayEnd && schedule.endsAt > dayStart;
 }
 
-function Item({ schedule, organizationId }: { schedule: ScheduleItem; organizationId: string }) {
+function itemSummary(schedule: ScheduleItem, rowKind?: Row["kind"]) {
+  if (rowKind === "leave") return schedule.targetUserName || schedule.creatorProfileName || schedule.title;
+  if (rowKind === "external") {
+    const name = schedule.targetUserName || schedule.creatorProfileName;
+    return `${categoryLabel[schedule.category]}${name ? ` · ${name}` : ""}`;
+  }
+  if (schedule.itemType === "TASK") return `업무 · ${schedule.title}`;
+  return `${!schedule.isAllDay ? `${format(schedule.startsAt, "HH:mm")} ` : ""}${schedule.title}`;
+}
+
+function Item({
+  schedule,
+  organizationId,
+  rowKind,
+}: {
+  schedule: ScheduleItem;
+  organizationId: string;
+  rowKind?: Row["kind"];
+}) {
   return (
     <details className={`schedule-item ${schedule.isImportant ? "schedule-item-important" : ""}`} title={schedule.title}>
       <summary className="cursor-pointer list-none font-bold">
         {schedule.isImportant && <Flag className="mr-1 inline" size={11} />}
-        {!schedule.isAllDay && `${format(schedule.startsAt, "HH:mm")} `}{schedule.title}
+        {itemSummary(schedule, rowKind)}
       </summary>
       <div className="mt-2 whitespace-normal rounded-md bg-white/80 p-2 text-xs leading-5 shadow-sm">
-        <div className="flex flex-wrap gap-1"><span className="badge badge-gray">{scopeLabel[schedule.scope]}</span><span className="badge badge-gray">{categoryLabel[schedule.category]}</span></div>
+        <p className="font-extrabold">{schedule.title}</p>
         {schedule.description && <p className="mt-2">{schedule.description}</p>}
+        <p className="mt-2 text-slate-500">등록: {schedule.creatorProfileName || "알 수 없음"}</p>
         <form action={deleteScheduleAction} className="mt-2 no-print">
           <input type="hidden" name="organizationId" value={organizationId} />
           <input type="hidden" name="scheduleId" value={schedule.id} />
-          <button className="btn btn-danger min-h-8 px-2 py-1 text-xs" type="submit"><Trash2 size={12} /> 삭제</button>
+          <SubmitButton className="btn btn-danger min-h-8 px-2 py-1 text-xs" pendingLabel="삭제 중…"><Trash2 size={12} /> 삭제</SubmitButton>
         </form>
       </div>
     </details>
@@ -65,18 +106,29 @@ export function WeekBoard({
 }: {
   organizationId: string;
   days: Date[];
-  departments: Array<{ id: string; name: string }>;
+  departments: Array<{ id: string; name: string; isSystem: boolean }>;
   members: Array<{ userId: string; name: string; departmentId: string }>;
   schedules: ScheduleItem[];
 }) {
   const rows: Row[] = [
-    { id: "organization", label: "조직 전체", kind: "organization" },
-    ...departments.flatMap((department) => [
+    { id: "common", label: "공통사항", kind: "common" },
+    { id: "external", label: "외부 업무", kind: "external" },
+    { id: "leave", label: "휴가", kind: "leave" },
+    ...departments.filter((department) => !department.isSystem).flatMap((department) => [
       { id: `department-${department.id}`, label: department.name, kind: "department" as const, departmentId: department.id },
       ...members.filter((member) => member.departmentId === department.id).map((member) => ({
         id: `member-${member.userId}`, label: `└ ${member.name}`, kind: "member" as const, userId: member.userId, departmentId: department.id,
       })),
     ]),
+    ...departments.filter((department) => department.isSystem).flatMap((department) =>
+      members.filter((member) => member.departmentId === department.id).map((member) => ({
+        id: `member-${member.userId}`,
+        label: member.name,
+        kind: "member" as const,
+        userId: member.userId,
+        departmentId: department.id,
+      })),
+    ),
   ];
   return (
     <div className="schedule-scroll" aria-label="주간 일정표">
@@ -88,7 +140,7 @@ export function WeekBoard({
             <div className={`week-cell week-label flex items-center font-bold ${row.kind === "member" ? "pl-5 text-sm text-slate-600" : ""}`}>{row.label}</div>
             {days.map((day) => {
               const items = schedules.filter((schedule) => belongsToRow(schedule, row) && occursOnDay(schedule, day));
-              return <div key={`${row.id}-${day.toISOString()}`} className={`week-cell ${isToday(day) ? "today" : ""}`}>{items.slice(0, 3).map((schedule) => <Item key={schedule.id} schedule={schedule} organizationId={organizationId} />)}{items.length > 3 && <span className="muted px-1 text-xs font-bold">+{items.length - 3}개</span>}</div>;
+              return <div key={`${row.id}-${day.toISOString()}`} className={`week-cell ${isToday(day) ? "today" : ""}`}>{items.slice(0, 3).map((schedule) => <Item key={schedule.id} schedule={schedule} organizationId={organizationId} rowKind={row.kind} />)}{items.length > 3 && <span className="muted px-1 text-xs font-bold">+{items.length - 3}개</span>}</div>;
             })}
           </div>
         ))}

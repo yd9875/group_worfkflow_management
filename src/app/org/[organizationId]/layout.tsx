@@ -16,7 +16,7 @@ export default async function OrganizationLayout({
     <AppShell
       organizationId={organizationId}
       organizationName={membership.organization.name}
-      userName={membership.user.name}
+      userName={membership.profileName?.trim() || membership.user.name}
       role={membership.role}
       unreadCount={unreadCount}
     >

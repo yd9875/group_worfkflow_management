@@ -163,6 +163,7 @@ async function scheduleRecipients(
 export async function createScheduleAction(formData: FormData) {
   const organizationId = text(formData, "organizationId");
   const membership = await requireMembership(organizationId);
+  const scope = text(formData, "scope");
   const parsed = scheduleInputSchema.parse({
     organizationId,
     title: text(formData, "title"),
@@ -170,11 +171,11 @@ export async function createScheduleAction(formData: FormData) {
     startsAt: text(formData, "startsAt"),
     endsAt: text(formData, "endsAt"),
     isAllDay: formData.get("isAllDay") === "on",
-    scope: text(formData, "scope"),
+    scope,
     category: text(formData, "category"),
     isImportant: formData.get("isImportant") === "on",
     departmentId: text(formData, "departmentId") || null,
-    targetUserId: text(formData, "targetUserId") || null,
+    targetUserId: scope === "PERSONAL" ? membership.userId : null,
   });
   if (!canCreateSchedule(membership, parsed.scope, parsed)) {
     throw new AppError("FORBIDDEN", "이 범위의 일정을 등록할 권한이 없습니다.", 403);
@@ -204,6 +205,7 @@ export async function createScheduleAction(formData: FormData) {
     const schedule = await tx.schedule.create({
       data: {
         ...parsed,
+        itemType: "SCHEDULE",
         description: parsed.description || null,
         departmentId: parsed.scope === "DEPARTMENT" ? parsed.departmentId : null,
         targetUserId: parsed.scope === "PERSONAL" ? parsed.targetUserId : null,
@@ -235,6 +237,58 @@ export async function createScheduleAction(formData: FormData) {
         entityType: "SCHEDULE",
         entityId: schedule.id,
         metadataJson: { scope: schedule.scope, category: schedule.category },
+      },
+    });
+  });
+  revalidatePath(`/org/${organizationId}/schedule/week`);
+  revalidatePath(`/org/${organizationId}/schedule/month`);
+}
+
+export async function createTaskAction(formData: FormData) {
+  const organizationId = text(formData, "organizationId");
+  const membership = await requireMembership(organizationId);
+  const input = z
+    .object({
+      title: z.string().trim().min(1).max(100),
+      description: z.string().trim().max(2000).optional(),
+      date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      isImportant: z.boolean(),
+    })
+    .parse({
+      title: text(formData, "title"),
+      description: text(formData, "description") || undefined,
+      date: text(formData, "date"),
+      isImportant: formData.get("isImportant") === "on",
+    });
+  const startsAt = new Date(`${input.date}T00:00:00+09:00`);
+  const endsAt = new Date(startsAt.getTime() + 24 * 60 * 60 * 1000);
+
+  await prisma.$transaction(async (tx) => {
+    const task = await tx.schedule.create({
+      data: {
+        organizationId,
+        createdByUserId: membership.userId,
+        updatedByUserId: membership.userId,
+        title: input.title,
+        description: input.description || null,
+        itemType: "TASK",
+        startsAt,
+        endsAt,
+        isAllDay: true,
+        scope: "PERSONAL",
+        category: "GENERAL",
+        isImportant: input.isImportant,
+        targetUserId: membership.userId,
+      },
+    });
+    await tx.auditLog.create({
+      data: {
+        organizationId,
+        actorUserId: membership.userId,
+        action: "TASK_CREATED",
+        entityType: "SCHEDULE",
+        entityId: task.id,
+        metadataJson: { important: input.isImportant },
       },
     });
   });
@@ -299,6 +353,148 @@ export async function createDepartmentAction(formData: FormData) {
     },
   });
   revalidatePath(`/org/${organizationId}/admin/departments`);
+}
+
+export async function updateDepartmentAction(formData: FormData) {
+  const organizationId = text(formData, "organizationId");
+  const membership = await requireMembership(organizationId, ["OWNER", "ADMIN"]);
+  const input = z
+    .object({
+      departmentId: z.string().uuid(),
+      name: z.string().trim().min(1).max(60),
+      description: z.string().trim().max(300).optional(),
+    })
+    .parse({
+      departmentId: text(formData, "departmentId"),
+      name: text(formData, "name"),
+      description: text(formData, "description") || undefined,
+    });
+  const department = await prisma.department.findFirst({
+    where: {
+      id: input.departmentId,
+      organizationId,
+      isActive: true,
+      isSystem: false,
+    },
+  });
+  if (!department) {
+    throw new AppError("NOT_FOUND", "수정할 부서를 찾지 못했습니다.", 404);
+  }
+  await prisma.$transaction([
+    prisma.department.update({
+      where: { id: department.id },
+      data: { name: input.name, description: input.description || null },
+    }),
+    prisma.auditLog.create({
+      data: {
+        organizationId,
+        actorUserId: membership.userId,
+        action: "DEPARTMENT_UPDATED",
+        entityType: "DEPARTMENT",
+        entityId: department.id,
+        metadataJson: { name: input.name },
+      },
+    }),
+  ]);
+  revalidatePath(`/org/${organizationId}/admin/departments`);
+  revalidatePath(`/org/${organizationId}/schedule/week`);
+}
+
+export async function deleteDepartmentAction(formData: FormData) {
+  const organizationId = text(formData, "organizationId");
+  const membership = await requireMembership(organizationId, ["OWNER", "ADMIN"]);
+  const departmentId = z.string().uuid().parse(text(formData, "departmentId"));
+  const [department, fallback] = await Promise.all([
+    prisma.department.findFirst({
+      where: { id: departmentId, organizationId, isActive: true, isSystem: false },
+    }),
+    prisma.department.findFirst({
+      where: { organizationId, isActive: true, isSystem: true },
+    }),
+  ]);
+  if (!department) {
+    throw new AppError("NOT_FOUND", "삭제할 부서를 찾지 못했습니다.", 404);
+  }
+  if (!fallback) {
+    throw new AppError("CONFLICT", "구성원을 이동할 기본 부서가 없습니다.", 409);
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.membership.updateMany({
+      where: { organizationId, departmentId },
+      data: { departmentId: fallback.id },
+    });
+    await tx.joinRequest.updateMany({
+      where: { organizationId, departmentId },
+      data: { departmentId: null },
+    });
+    await tx.schedule.updateMany({
+      where: { organizationId, departmentId, deletedAt: null },
+      data: { deletedAt: new Date(), updatedByUserId: membership.userId },
+    });
+    await tx.department.update({
+      where: { id: department.id },
+      data: {
+        name: `삭제됨-${department.id}`,
+        isActive: false,
+        description: department.description,
+      },
+    });
+    await tx.auditLog.create({
+      data: {
+        organizationId,
+        actorUserId: membership.userId,
+        action: "DEPARTMENT_DELETED",
+        entityType: "DEPARTMENT",
+        entityId: department.id,
+        metadataJson: { name: department.name },
+      },
+    });
+  });
+  revalidatePath(`/org/${organizationId}/admin/departments`);
+  revalidatePath(`/org/${organizationId}/admin/members`);
+  revalidatePath(`/org/${organizationId}/schedule/week`);
+  revalidatePath(`/org/${organizationId}/schedule/month`);
+}
+
+export async function updateOrganizationProfileAction(formData: FormData) {
+  const organizationId = text(formData, "organizationId");
+  const membership = await requireMembership(organizationId);
+  const profileName = z
+    .string()
+    .trim()
+    .max(60)
+    .parse(text(formData, "profileName"));
+  await prisma.membership.update({
+    where: { id: membership.id },
+    data: { profileName: profileName || null },
+  });
+  revalidatePath("/account");
+  revalidatePath(`/org/${organizationId}`, "layout");
+}
+
+export async function deleteOrganizationAction(formData: FormData) {
+  const organizationId = text(formData, "organizationId");
+  const membership = await requireMembership(organizationId, ["OWNER"]);
+  const confirmation = text(formData, "confirmation").trim();
+  if (confirmation !== membership.organization.name) {
+    throw new AppError("VALIDATION_ERROR", "조직 이름을 정확히 입력해 주세요.");
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.userPreference.updateMany({
+      where: { lastOrganizationId: organizationId },
+      data: { lastOrganizationId: null },
+    });
+    await tx.notification.deleteMany({ where: { organizationId } });
+    await tx.auditLog.deleteMany({ where: { organizationId } });
+    await tx.schedule.deleteMany({ where: { organizationId } });
+    await tx.joinRequest.deleteMany({ where: { organizationId } });
+    await tx.membership.deleteMany({ where: { organizationId } });
+    await tx.department.deleteMany({ where: { organizationId } });
+    await tx.organization.delete({ where: { id: organizationId } });
+  });
+  redirect("/organizations");
 }
 
 export async function approveJoinRequestAction(formData: FormData) {

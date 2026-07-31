@@ -8,6 +8,7 @@ import { listMyOrganizations } from "@/features/queries";
 import { requireUser } from "@/lib/session";
 import { prisma } from "@/lib/db";
 import { SignOutButton } from "@/components/sign-out-button";
+import { SubmitButton } from "@/components/submit-button";
 
 export const dynamic = "force-dynamic";
 
@@ -67,7 +68,7 @@ export default async function OrganizationsPage() {
           <div className="mt-5 grid gap-4">
             <label className="label">조직명<input className="field" name="name" minLength={2} maxLength={60} required /></label>
             <label className="label">설명<textarea className="field" name="description" maxLength={500} /></label>
-            <button className="btn btn-primary" type="submit">조직 만들기</button>
+            <SubmitButton className="btn btn-primary" pendingLabel="만드는 중…">조직 만들기</SubmitButton>
           </div>
         </form>
         <form action={requestJoinAction} className="card p-6">
@@ -75,7 +76,7 @@ export default async function OrganizationsPage() {
           <p className="muted mt-3 text-sm leading-6">관리자에게 받은 8~12자의 가입 코드를 입력하세요. 승인 후 일정에 접근할 수 있습니다.</p>
           <div className="mt-5 grid gap-4">
             <label className="label">가입 코드<input className="field uppercase tracking-[.2em]" name="code" minLength={8} maxLength={12} required /></label>
-            <button className="btn btn-secondary" type="submit">가입 신청하기</button>
+            <SubmitButton className="btn btn-secondary" pendingLabel="신청 중…">가입 신청하기</SubmitButton>
           </div>
           {pending.map((request) => <p key={request.id} className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">{request.organization.name} 가입 승인 대기 중</p>)}
         </form>

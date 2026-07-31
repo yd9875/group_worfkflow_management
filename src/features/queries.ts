@@ -37,19 +37,6 @@ export async function listSchedules(input: {
   organizationId: string;
   date: Date;
   view: "week" | "month";
-  departments?: string[];
-  scopes?: Array<"ORGANIZATION" | "DEPARTMENT" | "PERSONAL">;
-  categories?: Array<
-    | "GENERAL"
-    | "MEETING"
-    | "TRAINING"
-    | "LEAVE"
-    | "BUSINESS_TRIP"
-    | "OUTING"
-    | "OTHER"
-  >;
-  important?: boolean;
-  search?: string;
 }) {
   const membership = await requireMembership(input.organizationId);
   const rangeStart =
@@ -78,22 +65,6 @@ export async function listSchedules(input: {
       startsAt: { lt: rangeEnd },
       endsAt: { gt: rangeStart },
       ...visibility,
-      ...(input.departments?.length
-        ? { departmentId: { in: input.departments } }
-        : {}),
-      ...(input.scopes?.length ? { scope: { in: input.scopes } } : {}),
-      ...(input.categories?.length
-        ? { category: { in: input.categories } }
-        : {}),
-      ...(input.important ? { isImportant: true } : {}),
-      ...(input.search
-        ? {
-            OR: [
-              { title: { contains: input.search, mode: "insensitive" } },
-              { description: { contains: input.search, mode: "insensitive" } },
-            ],
-          }
-        : {}),
     },
     include: {
       department: true,
@@ -124,7 +95,7 @@ export async function getAdminData(organizationId: string) {
       take: 100,
     }),
     prisma.department.findMany({
-      where: { organizationId },
+      where: { organizationId, isActive: true },
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     }),
     prisma.membership.findMany({
