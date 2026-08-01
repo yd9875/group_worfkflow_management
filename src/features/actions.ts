@@ -476,6 +476,33 @@ export async function updateScheduleAction(formData: FormData) {
   redirect(`/org/${organizationId}/personal?date=${text(formData, "returnDate")}`);
 }
 
+export async function savePersonalDailyMemoAction(formData: FormData) {
+  const organizationId = text(formData, "organizationId");
+  const membership = await requireMembership(organizationId);
+  const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(text(formData, "date"));
+  const content = z.string().trim().max(20000).parse(text(formData, "content"));
+  const memoDate = new Date(`${date}T00:00:00.000Z`);
+
+  if (content) {
+    await prisma.personalDailyMemo.upsert({
+      where: {
+        organizationId_userId_date: {
+          organizationId,
+          userId: membership.userId,
+          date: memoDate,
+        },
+      },
+      create: { organizationId, userId: membership.userId, date: memoDate, content },
+      update: { content },
+    });
+  } else {
+    await prisma.personalDailyMemo.deleteMany({
+      where: { organizationId, userId: membership.userId, date: memoDate },
+    });
+  }
+  revalidatePath(`/org/${organizationId}/personal`);
+}
+
 export async function toggleTaskCompleteAction(formData: FormData) {
   const organizationId = text(formData, "organizationId");
   const scheduleId = z.string().uuid().parse(text(formData, "scheduleId"));
@@ -522,6 +549,8 @@ export async function deleteScheduleAction(formData: FormData) {
   ]);
   revalidatePath(`/org/${organizationId}/schedule/week`);
   revalidatePath(`/org/${organizationId}/schedule/month`);
+  revalidatePath(`/org/${organizationId}/schedule/day`);
+  revalidatePath(`/org/${organizationId}/personal`);
 }
 
 export async function createDepartmentAction(formData: FormData) {

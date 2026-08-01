@@ -168,7 +168,8 @@ export async function getPlannerData(
   editId?: string,
 ) {
   const membership = await requireMembership(organizationId);
-  const [items, editItem] = await Promise.all([
+  const memoDate = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const [items, editItem, personalMemo] = await Promise.all([
     prisma.schedule.findMany({
       where: {
         organizationId,
@@ -185,11 +186,22 @@ export async function getPlannerData(
           where: { id: editId, organizationId, deletedAt: null },
         })
       : null,
+    prisma.personalDailyMemo.findUnique({
+      where: {
+        organizationId_userId_date: {
+          organizationId,
+          userId: membership.userId,
+          date: memoDate,
+        },
+      },
+      select: { content: true },
+    }),
   ]);
   return {
     membership,
     items,
     editItem: editItem && canEditSchedule(membership, editItem) ? editItem : null,
+    personalMemo: personalMemo?.content ?? "",
   };
 }
 
