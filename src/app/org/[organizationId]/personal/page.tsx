@@ -48,11 +48,13 @@ function EntryForm({
   date,
   itemType,
   item,
+  closeHref,
 }: {
   organizationId: string;
   date: string;
   itemType: "SCHEDULE" | "TASK";
   item?: PlannerItem | null;
+  closeHref: string;
 }) {
   const editing = Boolean(item);
   const startDefault = item ? dateTimeValue(item.startsAt) : `${date}T09:00`;
@@ -67,7 +69,7 @@ function EntryForm({
           {isTask ? <ClipboardPlus className="text-amber-700" size={19} /> : <CalendarPlus2 className="text-[var(--brand)]" size={19} />}
           <h3 className="font-extrabold">{editing ? `${isTask ? "업무" : "일정"} 수정` : `새 ${isTask ? "업무" : "일정"}`}</h3>
         </div>
-        <Link className="btn btn-quiet min-h-8 px-2 py-1 text-xs" href={`?date=${date}`}>닫기</Link>
+        <Link className="btn btn-quiet min-h-8 px-2 py-1 text-xs" href={closeHref}>닫기</Link>
       </div>
       <input type="hidden" name="organizationId" value={organizationId} />
       <input type="hidden" name="returnDate" value={date} />
@@ -159,8 +161,21 @@ export default async function PersonalPlannerPage({ params, searchParams }: {
   const date = format(selectedDate, "yyyy-MM-dd");
   const schedules = items.filter((item) => item.itemType === "SCHEDULE");
   const tasks = items.filter((item) => item.itemType === "TASK");
-  const requestedNewType = search.new === "task" ? "TASK" : search.new === "schedule" ? "SCHEDULE" : null;
-  const activeFormType = editItem?.itemType ?? requestedNewType;
+  const requestedNewTypes = new Set((search.new ?? "").split(",").filter((value) => value === "schedule" || value === "task"));
+  const showScheduleForm = editItem?.itemType === "SCHEDULE" || (!editItem && requestedNewTypes.has("schedule"));
+  const showTaskForm = editItem?.itemType === "TASK" || (!editItem && requestedNewTypes.has("task"));
+  const addFormHref = (type: "schedule" | "task") => {
+    const next = new Set(requestedNewTypes);
+    next.add(type);
+    return `?date=${date}&new=${Array.from(next).join(",")}`;
+  };
+  const closeFormHref = (type: "schedule" | "task") => {
+    if (editItem) return `?date=${date}`;
+    const next = new Set(requestedNewTypes);
+    next.delete(type);
+    const query = Array.from(next).join(",");
+    return query ? `?date=${date}&new=${query}` : `?date=${date}`;
+  };
 
   return (
     <div className="mx-auto grid max-w-5xl gap-6">
@@ -175,21 +190,21 @@ export default async function PersonalPlannerPage({ params, searchParams }: {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link className="btn btn-primary" href={`?date=${date}&new=schedule`}><CalendarPlus2 size={17} /> 일정 추가</Link>
-          <Link className="btn btn-secondary" href={`?date=${date}&new=task`}><ClipboardPlus size={17} /> 업무 추가</Link>
+          <Link className="btn btn-primary" href={addFormHref("schedule")}><CalendarPlus2 size={17} /> 일정 추가</Link>
+          <Link className="btn btn-primary" href={addFormHref("task")}><ClipboardPlus size={17} /> 업무 추가</Link>
         </div>
       </header>
 
       <section className="card grid gap-4 p-5 sm:p-6">
         <div className="flex items-center justify-between gap-3"><div><p className="eyebrow">Schedule</p><h2 className="mt-1 text-xl font-extrabold">일정</h2></div><span className="badge badge-green">{schedules.length}개</span></div>
-        {activeFormType === "SCHEDULE" && <EntryForm organizationId={organizationId} date={date} itemType="SCHEDULE" item={editItem?.itemType === "SCHEDULE" ? editItem : null} />}
-        <div className="grid gap-3">{schedules.map((item) => <EntryCard organizationId={organizationId} date={date} item={item} key={item.id} />)}{!schedules.length && activeFormType !== "SCHEDULE" && <p className="muted rounded-xl bg-slate-50 py-8 text-center text-sm">등록된 일정이 없습니다. 위의 일정 추가 버튼으로 시작하세요.</p>}</div>
+        {showScheduleForm && <EntryForm organizationId={organizationId} date={date} itemType="SCHEDULE" item={editItem?.itemType === "SCHEDULE" ? editItem : null} closeHref={closeFormHref("schedule")} />}
+        <div className="grid gap-3">{schedules.map((item) => <EntryCard organizationId={organizationId} date={date} item={item} key={item.id} />)}{!schedules.length && !showScheduleForm && <p className="muted rounded-xl bg-slate-50 py-8 text-center text-sm">등록된 일정이 없습니다. 위의 일정 추가 버튼으로 시작하세요.</p>}</div>
       </section>
 
       <section className="card grid gap-4 p-5 sm:p-6">
         <div className="flex items-center justify-between gap-3"><div><p className="eyebrow">Tasks</p><h2 className="mt-1 text-xl font-extrabold">업무</h2></div><span className="badge badge-orange">{tasks.length}개</span></div>
-        {activeFormType === "TASK" && <EntryForm organizationId={organizationId} date={date} itemType="TASK" item={editItem?.itemType === "TASK" ? editItem : null} />}
-        <div className="grid gap-3">{tasks.map((item) => <EntryCard organizationId={organizationId} date={date} item={item} key={item.id} />)}{!tasks.length && activeFormType !== "TASK" && <p className="muted rounded-xl bg-slate-50 py-8 text-center text-sm">등록된 업무가 없습니다. 위의 업무 추가 버튼으로 시작하세요.</p>}</div>
+        {showTaskForm && <EntryForm organizationId={organizationId} date={date} itemType="TASK" item={editItem?.itemType === "TASK" ? editItem : null} closeHref={closeFormHref("task")} />}
+        <div className="grid gap-3">{tasks.map((item) => <EntryCard organizationId={organizationId} date={date} item={item} key={item.id} />)}{!tasks.length && !showTaskForm && <p className="muted rounded-xl bg-slate-50 py-8 text-center text-sm">등록된 업무가 없습니다. 위의 업무 추가 버튼으로 시작하세요.</p>}</div>
       </section>
 
       <form action={savePersonalDailyMemoAction} className="card p-5 sm:p-6">
