@@ -205,6 +205,10 @@ export async function getReportData(
     select: {
       name: true,
       reportReference: true,
+      reportReferencePrinciples: {
+        select: { id: true, content: true },
+        orderBy: { createdAt: "asc" },
+      },
       reportReferenceFiles: {
         select: { fileName: true, mimeType: true, size: true, objectKey: true },
         orderBy: { createdAt: "asc" },
@@ -232,7 +236,7 @@ export async function listNotifications(organizationId: string) {
 
 export async function getAdminData(organizationId: string) {
   const currentMembership = await requireMembership(organizationId, ["OWNER", "ADMIN"]);
-  const [requests, departments, members, auditLogs, reportReferenceFiles] = await Promise.all([
+  const [requests, departments, members, auditLogs, reportReferenceFiles, savedReportPrinciples] = await Promise.all([
     prisma.joinRequest.findMany({
       where: { organizationId, status: "PENDING" },
       select: {
@@ -286,6 +290,17 @@ export async function getAdminData(organizationId: string) {
       select: { id: true, fileName: true, mimeType: true, size: true, updatedAt: true },
       orderBy: { createdAt: "asc" },
     }),
+    prisma.reportReferencePrinciple.findMany({
+      where: { organizationId },
+      select: { id: true, content: true },
+      orderBy: { createdAt: "asc" },
+    }),
   ]);
-  return { currentMembership, requests, departments, members, auditLogs, reportReferenceFiles };
+  const reportPrinciples = [
+    ...(currentMembership.organization.reportReference?.trim()
+      ? [{ id: "legacy", content: currentMembership.organization.reportReference.trim() }]
+      : []),
+    ...savedReportPrinciples,
+  ];
+  return { currentMembership, requests, departments, members, auditLogs, reportReferenceFiles, reportPrinciples };
 }

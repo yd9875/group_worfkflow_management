@@ -123,25 +123,38 @@ model Verification {
 }
 
 model Organization {
-  id                   String                @id @default(uuid())
-  name                 String
-  description          String?
-  timezone             String                @default("Asia/Seoul")
-  joinCodeHash         String                @unique
-  joinCodeCiphertext   String
-  createdAt            DateTime              @default(now())
-  updatedAt            DateTime              @updatedAt
-  reportReference      String?
-  memberships          Membership[]
-  departments          Department[]
-  joinRequests         JoinRequest[]
-  schedules            Schedule[]
-  notifications        Notification[]
-  auditLogs            AuditLog[]
-  preferences          UserPreference[]
-  reportReferenceFiles ReportReferenceFile[]
+  id                        String                     @id @default(uuid())
+  name                      String
+  description               String?
+  timezone                  String                     @default("Asia/Seoul")
+  joinCodeHash              String                     @unique
+  joinCodeCiphertext        String
+  createdAt                 DateTime                   @default(now())
+  updatedAt                 DateTime                   @updatedAt
+  reportReference           String?
+  memberships               Membership[]
+  departments               Department[]
+  joinRequests              JoinRequest[]
+  schedules                 Schedule[]
+  notifications             Notification[]
+  auditLogs                 AuditLog[]
+  preferences               UserPreference[]
+  reportReferenceFiles      ReportReferenceFile[]
+  reportReferencePrinciples ReportReferencePrinciple[]
 
   @@map("organizations")
+}
+
+model ReportReferencePrinciple {
+  id             String       @id @default(uuid())
+  organizationId String
+  content        String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+  @@map("report_reference_principles")
 }
 
 model ReportReferenceFile {

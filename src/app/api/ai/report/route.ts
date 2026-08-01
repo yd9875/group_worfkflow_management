@@ -212,7 +212,10 @@ export async function POST(request: Request) {
       organizationName: organization.name,
       view: input.view,
       date: input.date,
-      organizationReference: organization.reportReference,
+      organizationReference: [
+        organization.reportReference,
+        ...organization.reportReferencePrinciples.map((principle) => principle.content),
+      ].filter(Boolean).join("\n- ") || null,
       scheduleData,
       referenceFiles,
     });

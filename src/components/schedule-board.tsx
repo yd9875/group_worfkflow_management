@@ -134,7 +134,6 @@ export function DayBoard({ organizationId, day, departments, schedules }: {
     ...departments.filter((department) => !department.isSystem).map((department) => ({ id: `department-${department.id}`, label: department.name, kind: "department" as const, departmentId: department.id })),
     { id: "external", label: "외부 일정", kind: "external" },
     { id: "leave", label: "휴가", kind: "leave" },
-    { id: "personal", label: "개인 일정", kind: "personal" },
   ];
 
   return (

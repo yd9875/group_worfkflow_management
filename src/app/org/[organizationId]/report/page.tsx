@@ -25,6 +25,10 @@ export default async function ReportPage({ params, searchParams }: {
   const categoryCounts = Object.entries(schedules.reduce<Record<string, number>>((counts, item) => ({ ...counts, [item.category]: (counts[item.category] ?? 0) + 1 }), {})).sort((a, b) => b[1] - a[1]);
   const viewLabel = view === "day" ? "일일" : view === "week" ? "주간" : "월간";
   const dateValue = format(date, "yyyy-MM-dd");
+  const reportPrinciples = [
+    ...(organization.reportReference?.trim() ? [organization.reportReference.trim()] : []),
+    ...organization.reportReferencePrinciples.map((principle) => principle.content),
+  ];
 
   return (
     <article className="mx-auto max-w-5xl">
@@ -55,7 +59,7 @@ export default async function ReportPage({ params, searchParams }: {
         <div className="mt-4 divide-y divide-[var(--line)]">{schedules.map((item) => <div className="flex flex-wrap items-start justify-between gap-3 py-4" key={item.id}><div><p className="font-bold">{item.isImportant && <Flag className="mr-1 inline text-[var(--accent)]" size={14} />}{item.title}</p><p className="muted mt-1 text-sm">{categoryLabel[item.category]} · {item.isAllDay ? "종일" : format(item.startsAt, "M.d HH:mm")}{item.department?.name ? ` · ${item.department.name}` : ""}</p>{item.description && <p className="mt-2 text-sm leading-6">{item.description}</p>}</div>{item.itemType === "TASK" && <span className={`badge ${item.isCompleted ? "badge-green" : "badge-gray"}`}><CheckCircle2 size={12} /> {item.isCompleted ? "완료" : "진행"}</span>}</div>)}{!schedules.length && <p className="muted py-8 text-center">보고할 일정이 없습니다.</p>}</div>
       </section>
 
-      <section className="card mt-5 p-6"><h2 className="font-extrabold">적용된 조직 레퍼런스</h2><p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-slate-600">{organization.reportReference || "등록된 레퍼런스가 없습니다. 조직 관리에서 보고서 작성 원칙과 예시를 등록할 수 있습니다."}</p></section>
+      <section className="card mt-5 p-6"><h2 className="font-extrabold">적용된 조직 레퍼런스</h2><div className="mt-3 grid gap-2 text-sm leading-7 text-slate-600">{reportPrinciples.map((principle, index) => <p className="whitespace-pre-wrap" key={`${index}-${principle.slice(0, 20)}`}><b className="mr-2 text-[var(--brand)]">{index + 1}.</b>{principle}</p>)}{!reportPrinciples.length && <p>등록된 레퍼런스가 없습니다. 조직 관리에서 보고서 작성 원칙과 예시를 등록할 수 있습니다.</p>}</div></section>
     </article>
   );
 }

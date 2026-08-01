@@ -1,15 +1,16 @@
 import {
   approveJoinRequestAction,
+  createReportReferencePrincipleAction,
   createDepartmentAction,
   deleteDepartmentAction,
   deleteOrganizationAction,
   deleteReportReferenceFileAction,
+  deleteReportReferencePrincipleAction,
   getJoinCode,
   rejectJoinRequestAction,
   rotateJoinCodeAction,
   updateDepartmentAction,
   updateMemberAction,
-  updateReportReferenceAction,
   uploadReportReferenceFileAction,
 } from "@/features/actions";
 import { getAdminData } from "@/features/queries";
@@ -213,11 +214,25 @@ export async function AdminPanel({
           </article>
           <article className="card p-6">
             <div className="flex items-center gap-3"><FileText className="text-[var(--brand)]" /><div><h2 className="font-extrabold">AI 보고서 레퍼런스</h2><p className="muted text-sm">보고서에 반영할 조직 용어, 작성 원칙, 강조 지표와 예시를 등록하세요.</p></div></div>
-            <form action={updateReportReferenceAction}>
+            <form action={createReportReferencePrincipleAction}>
               <input type="hidden" name="organizationId" value={organizationId} />
-              <textarea className="field mt-5 min-h-48" name="reportReference" maxLength={12000} defaultValue={data.currentMembership.organization.reportReference ?? ""} placeholder="예: 임원 보고용 문체, 부서별 핵심 지표, 반드시 포함할 리스크 기준…" />
+              <textarea className="field mt-5 min-h-32" name="content" maxLength={4000} placeholder="예: 임원 보고용 문체 사용, 부서별 핵심 지표 포함, 확인되지 않은 수치 작성 금지…" required />
               <SubmitButton className="btn btn-primary mt-3" pendingLabel="저장 중…">작성 원칙 저장</SubmitButton>
             </form>
+            <div className="mt-5 grid gap-2 border-t border-[var(--line)] pt-5">
+              <h3 className="font-extrabold">저장된 작성 원칙</h3>
+              {data.reportPrinciples.map((principle, index) => (
+                <div className="flex items-start justify-between gap-3 rounded-xl border border-[var(--line)] bg-slate-50 px-4 py-3" key={principle.id}>
+                  <p className="whitespace-pre-wrap text-sm leading-6"><span className="mr-2 font-extrabold text-[var(--brand)]">{index + 1}.</span>{principle.content}</p>
+                  <form action={deleteReportReferencePrincipleAction} className="shrink-0">
+                    <input type="hidden" name="organizationId" value={organizationId} />
+                    <input type="hidden" name="principleId" value={principle.id} />
+                    <ConfirmSubmitButton className="btn btn-danger min-h-8 px-2 py-1 text-xs" message="이 작성 원칙을 삭제할까요?"><Trash2 size={13} /> 삭제</ConfirmSubmitButton>
+                  </form>
+                </div>
+              ))}
+              {!data.reportPrinciples.length && <p className="muted rounded-xl bg-slate-50 px-4 py-3 text-sm">저장된 작성 원칙이 없습니다.</p>}
+            </div>
             <div className="mt-6 border-t border-[var(--line)] pt-5">
               <div className="flex items-start gap-3">
                 <Paperclip className="mt-0.5 text-[var(--brand)]" size={19} />

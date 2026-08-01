@@ -4,6 +4,7 @@ import { ko } from "date-fns/locale";
 import { CalendarDays, ChevronLeft, ChevronRight, Printer, SlidersHorizontal, Sparkles } from "lucide-react";
 import { getScheduleContext, listSchedules } from "@/features/queries";
 import { DayBoard, MonthBoard, ScheduleItem, WeekBoard } from "@/components/schedule-board";
+import { DatePickerNavigation } from "@/components/date-picker-navigation";
 
 type Search = {
   date?: string;
@@ -44,6 +45,7 @@ export async function SchedulePage({ organizationId, view, search }: { organizat
     creatorProfileName: schedule.createdByUserId ? profileNames.get(schedule.createdByUserId) ?? schedule.createdBy?.name ?? null : null,
   }));
   const dateValue = format(selectedDate, "yyyy-MM-dd");
+  const visibleSchedules = view === "day" ? serialized.filter((schedule) => schedule.scope !== "PERSONAL") : serialized;
   const querySuffix = (date: Date, keepFilters = true) => {
     const params = new URLSearchParams({ date: format(date, "yyyy-MM-dd") });
     if (keepFilters && search.category) params.set("category", search.category);
@@ -68,7 +70,14 @@ export async function SchedulePage({ organizationId, view, search }: { organizat
           </div>
           <div className="mt-2 flex items-center gap-1">
             <Link className="period-arrow no-print" href={`/org/${organizationId}/schedule/${view}?${querySuffix(previous)}`} aria-label="이전 기간"><ChevronLeft size={18} /></Link>
-            <p className="muted min-w-0 px-1 font-bold">{periodLabel}</p>
+            {view === "day" ? (
+              <DatePickerNavigation
+                basePath={`/org/${organizationId}/schedule/day`}
+                date={dateValue}
+                label={periodLabel}
+                query={{ category: search.category, department: search.department, member: search.member }}
+              />
+            ) : <p className="muted min-w-0 px-1 font-bold">{periodLabel}</p>}
             <Link className="period-arrow no-print" href={`/org/${organizationId}/schedule/${view}?${querySuffix(next)}`} aria-label="다음 기간"><ChevronRight size={18} /></Link>
           </div>
         </div>
@@ -89,13 +98,13 @@ export async function SchedulePage({ organizationId, view, search }: { organizat
       </form>
 
       {view === "day" ? (
-        <DayBoard organizationId={organizationId} day={selectedDate} departments={context.departments.map(({ id, name, isSystem }) => ({ id, name, isSystem }))} schedules={serialized} />
+        <DayBoard organizationId={organizationId} day={selectedDate} departments={context.departments.map(({ id, name, isSystem }) => ({ id, name, isSystem }))} schedules={visibleSchedules} />
       ) : view === "week" ? (
         <WeekBoard organizationId={organizationId} days={weekDays} departments={context.departments.map(({ id, name, isSystem }) => ({ id, name, isSystem }))} schedules={serialized} />
       ) : (
         <MonthBoard organizationId={organizationId} days={monthDays} currentMonth={selectedDate.getMonth()} schedules={serialized} />
       )}
-      {!schedules.length && <div className="card p-8 text-center"><CalendarDays className="mx-auto text-[var(--brand)]" /><p className="mt-3 font-bold">표시할 일정이 없습니다</p><p className="muted mt-1 text-sm">개인 일정관리에서 일정이나 업무를 등록하거나 필터를 초기화해 보세요.</p><Link className="btn btn-primary mt-4" href={`/org/${organizationId}/personal?date=${dateValue}`}>개인 일정관리 열기</Link></div>}
+      {!visibleSchedules.length && <div className="card p-8 text-center"><CalendarDays className="mx-auto text-[var(--brand)]" /><p className="mt-3 font-bold">표시할 일정이 없습니다</p><p className="muted mt-1 text-sm">개인 일정 관리에서 일정이나 업무를 등록하거나 필터를 초기화해 보세요.</p><Link className="btn btn-primary mt-4" href={`/org/${organizationId}/personal?date=${dateValue}`}>개인 일정 관리 열기</Link></div>}
     </div>
   );
 }

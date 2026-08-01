@@ -1030,27 +1030,71 @@ export async function rotateJoinCodeAction(formData: FormData) {
   revalidatePath(`/org/${organizationId}/admin/settings`);
 }
 
-export async function updateReportReferenceAction(formData: FormData) {
+export async function createReportReferencePrincipleAction(formData: FormData) {
   const organizationId = text(formData, "organizationId");
   const actor = await requireMembership(organizationId, ["OWNER", "ADMIN"]);
-  const reportReference = z.string().trim().max(12000).parse(text(formData, "reportReference"));
-  await prisma.$transaction([
-    prisma.organization.update({
-      where: { id: organizationId },
-      data: { reportReference: reportReference || null },
-    }),
-    prisma.auditLog.create({
+  const content = z.string().trim().min(1).max(4000).parse(text(formData, "content"));
+  await prisma.$transaction(async (tx) => {
+    const principle = await tx.reportReferencePrinciple.create({
+      data: { organizationId, content },
+    });
+    await tx.auditLog.create({
       data: {
         organizationId,
         actorUserId: actor.userId,
-        action: "REPORT_REFERENCE_UPDATED",
-        entityType: "ORGANIZATION",
-        entityId: organizationId,
-        metadataJson: { hasReference: Boolean(reportReference) },
+        action: "REPORT_REFERENCE_PRINCIPLE_CREATED",
+        entityType: "REPORT_REFERENCE_PRINCIPLE",
+        entityId: principle.id,
+        metadataJson: {},
       },
-    }),
-  ]);
+    });
+  });
   revalidatePath(`/org/${organizationId}/admin/settings`);
+  revalidatePath(`/org/${organizationId}/report`);
+}
+
+export async function deleteReportReferencePrincipleAction(formData: FormData) {
+  const organizationId = text(formData, "organizationId");
+  const principleId = text(formData, "principleId");
+  const actor = await requireMembership(organizationId, ["OWNER", "ADMIN"]);
+
+  if (principleId === "legacy") {
+    await prisma.$transaction([
+      prisma.organization.update({ where: { id: organizationId }, data: { reportReference: null } }),
+      prisma.auditLog.create({
+        data: {
+          organizationId,
+          actorUserId: actor.userId,
+          action: "REPORT_REFERENCE_PRINCIPLE_DELETED",
+          entityType: "REPORT_REFERENCE_PRINCIPLE",
+          entityId: organizationId,
+          metadataJson: { legacy: true },
+        },
+      }),
+    ]);
+  } else {
+    const id = z.string().uuid().parse(principleId);
+    const principle = await prisma.reportReferencePrinciple.findFirst({
+      where: { id, organizationId },
+      select: { id: true },
+    });
+    if (!principle) return;
+    await prisma.$transaction([
+      prisma.reportReferencePrinciple.delete({ where: { id: principle.id } }),
+      prisma.auditLog.create({
+        data: {
+          organizationId,
+          actorUserId: actor.userId,
+          action: "REPORT_REFERENCE_PRINCIPLE_DELETED",
+          entityType: "REPORT_REFERENCE_PRINCIPLE",
+          entityId: principle.id,
+          metadataJson: {},
+        },
+      }),
+    ]);
+  }
+  revalidatePath(`/org/${organizationId}/admin/settings`);
+  revalidatePath(`/org/${organizationId}/report`);
 }
 
 export async function uploadReportReferenceFileAction(formData: FormData) {

@@ -46,7 +46,6 @@ export function AppShell({
     { href: `${root}/schedule/day`, label: "일일 계획", icon: CalendarCheck2 },
     { href: `${root}/schedule/week`, label: "주간 일정", icon: CalendarRange },
     { href: `${root}/schedule/month`, label: "월간 일정", icon: CalendarDays },
-    { href: `${root}/personal`, label: "개인 일정관리", icon: NotebookPen },
     { href: `${root}/members`, label: "구성원 현황", icon: Users },
   ];
   const quickLinks = [
@@ -97,6 +96,12 @@ export function AppShell({
               <span>{label}</span>
             </Link>
           ))}
+        </nav>
+        <nav className="card mb-5 grid gap-1 p-2" aria-label="개인 일정 메뉴">
+          <Link className={`nav-link ${active(`${root}/personal`) ? "nav-link-active" : ""}`} href={`${root}/personal`}>
+            <NotebookPen size={18} />
+            <span>개인 일정 관리</span>
+          </Link>
         </nav>
         <nav className="grid gap-1" aria-label="주 메뉴">
           {links.map(({ href, label, icon: Icon }) => (

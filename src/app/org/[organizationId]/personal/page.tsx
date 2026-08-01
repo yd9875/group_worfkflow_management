@@ -5,6 +5,7 @@ import { CalendarPlus2, CheckCircle2, ChevronLeft, ChevronRight, Pencil, Trash2 
 import { createPersonalEntryAction, deleteScheduleAction, updateScheduleAction } from "@/features/actions";
 import { getPlannerData } from "@/features/queries";
 import { SubmitButton } from "@/components/submit-button";
+import { DatePickerNavigation } from "@/components/date-picker-navigation";
 
 const categoryLabel: Record<string, string> = {
   GENERAL: "일반", MEETING: "회의", TRAINING: "교육", LEAVE: "휴가",
@@ -31,10 +32,10 @@ export default async function PersonalPlannerPage({ params, searchParams }: {
     <div className="grid gap-6">
       <header>
         <p className="eyebrow">Personal planner</p>
-        <h1 className="page-title mt-1">개인 일정관리</h1>
+        <h1 className="page-title mt-1">개인 일정 관리</h1>
         <div className="mt-3 flex items-center gap-1">
           <Link className="period-arrow" href={`?date=${format(addDays(selectedDate, -1), "yyyy-MM-dd")}`} aria-label="이전 날짜"><ChevronLeft size={18} /></Link>
-          <p className="muted px-2 font-bold">{format(selectedDate, "yyyy년 M월 d일 EEEE", { locale: ko })}</p>
+          <DatePickerNavigation basePath={`/org/${organizationId}/personal`} date={date} label={format(selectedDate, "yyyy년 M월 d일 EEEE", { locale: ko })} />
           <Link className="period-arrow" href={`?date=${format(addDays(selectedDate, 1), "yyyy-MM-dd")}`} aria-label="다음 날짜"><ChevronRight size={18} /></Link>
         </div>
       </header>
