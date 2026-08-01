@@ -3,7 +3,6 @@
 import { useState } from "react";
 import Link from "next/link";
 import { CalendarCheck2, MailCheck } from "lucide-react";
-import { authClient } from "@/lib/auth-client";
 
 export function VerifyEmailCard({
   email,
@@ -28,6 +27,7 @@ export function VerifyEmailCard({
     setIsError(false);
 
     try {
+      const { authClient } = await import("@/lib/auth-client");
       const result = await authClient.sendVerificationEmail({
         email,
         callbackURL: "/verify-email",

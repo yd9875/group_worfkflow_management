@@ -48,15 +48,17 @@ export default async function PrintPage({
   const monthStart = startOfWeek(startOfMonth(selectedDate), { weekStartsOn: 1 });
   const monthEnd = endOfWeek(endOfMonth(selectedDate), { weekStartsOn: 1 });
   const monthDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
-  const context = await getScheduleContext(organizationId);
-  const schedules = await listSchedules({
-    organizationId,
-    date: selectedDate,
-    view,
-    categories: many(search.category),
-    departmentId: one(search.department),
-    memberId: one(search.member),
-  });
+  const [context, schedules] = await Promise.all([
+    getScheduleContext(organizationId),
+    listSchedules({
+      organizationId,
+      date: selectedDate,
+      view,
+      categories: many(search.category),
+      departmentId: one(search.department),
+      memberId: one(search.member),
+    }),
+  ]);
   const profileNames = new Map(
     context.members.map((member) => [member.userId, member.profileName?.trim() || member.user.name]),
   );

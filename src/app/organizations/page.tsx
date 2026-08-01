@@ -14,15 +14,17 @@ export const dynamic = "force-dynamic";
 
 export default async function OrganizationsPage() {
   const user = await requireUser();
-  const organizations = await listMyOrganizations();
-  const pending = await prisma.joinRequest.findMany({
-    where: { userId: user.id, status: "PENDING" },
-    select: {
-      id: true,
-      organization: { select: { name: true } },
-    },
-    orderBy: { requestedAt: "desc" },
-  });
+  const [organizations, pending] = await Promise.all([
+    listMyOrganizations(),
+    prisma.joinRequest.findMany({
+      where: { userId: user.id, status: "PENDING" },
+      select: {
+        id: true,
+        organization: { select: { name: true } },
+      },
+      orderBy: { requestedAt: "desc" },
+    }),
+  ]);
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-6xl px-5 py-8 sm:px-8 sm:py-12">

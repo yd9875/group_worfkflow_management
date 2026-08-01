@@ -2,8 +2,6 @@
 
 import { useState } from "react";
 import { AlertTriangle, Trash2 } from "lucide-react";
-import { authClient } from "@/lib/auth-client";
-import { useGlobalLoading } from "@/components/global-loading";
 
 export function DeleteAccountForm({
   blocked,
@@ -14,7 +12,6 @@ export function DeleteAccountForm({
   const [confirmation, setConfirmation] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
-  const { startLoading, stopLoading } = useGlobalLoading();
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -25,8 +22,8 @@ export function DeleteAccountForm({
     }
 
     setLoading(true);
-    startLoading(30000);
     setMessage("");
+    const { authClient } = await import("@/lib/auth-client");
     const result = await authClient.deleteUser({
       password,
       callbackURL: "/account-deleted",
@@ -38,7 +35,6 @@ export function DeleteAccountForm({
           : result.error.message ?? "회원 탈퇴를 처리하지 못했습니다.";
       setMessage(errorMessage);
       setLoading(false);
-      stopLoading();
       return;
     }
     window.location.href = "/account-deleted";

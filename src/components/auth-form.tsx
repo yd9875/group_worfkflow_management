@@ -4,12 +4,10 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, CalendarDays, CheckCircle2, Eye, EyeOff } from "lucide-react";
-import { authClient } from "@/lib/auth-client";
 import {
   PRIVACY_POLICY_VERSION,
   SIGNUP_PRIVACY_NOTICE,
 } from "@/lib/privacy";
-import { useGlobalLoading } from "@/components/global-loading";
 
 type Mode = "login" | "signup" | "forgot" | "reset";
 
@@ -48,12 +46,10 @@ export function AuthForm({ mode }: { mode: Mode }) {
   const [message, setMessage] = useState("");
   const [isError, setIsError] = useState(false);
   const current = copy[mode];
-  const { startLoading, stopLoading } = useGlobalLoading();
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoading(true);
-    startLoading(30000);
     setMessage("");
     setIsError(false);
     const data = new FormData(event.currentTarget);
@@ -81,6 +77,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
         }
         router.push(`/verify-email?email=${encodeURIComponent(email)}`);
       } else if (mode === "login") {
+        const { authClient } = await import("@/lib/auth-client");
         const result = await authClient.signIn.email({
           email,
           password,
@@ -96,15 +93,16 @@ export function AuthForm({ mode }: { mode: Mode }) {
         router.push("/organizations");
         router.refresh();
       } else if (mode === "forgot") {
+        const { authClient } = await import("@/lib/auth-client");
         await authClient.requestPasswordReset({
           email,
           redirectTo: "/reset-password",
         });
         setMessage("계정이 존재하면 비밀번호 재설정 메일을 보내드립니다.");
-        stopLoading();
       } else {
         const token = searchParams.get("token");
         if (!token) throw new Error("유효한 재설정 링크가 필요합니다.");
+        const { authClient } = await import("@/lib/auth-client");
         const result = await authClient.resetPassword({ token, newPassword: password });
         if (result.error) throw new Error("링크가 만료되었거나 사용할 수 없습니다.");
         setMessage("비밀번호를 변경했습니다. 새 비밀번호로 로그인해 주세요.");
@@ -113,7 +111,6 @@ export function AuthForm({ mode }: { mode: Mode }) {
     } catch (error) {
       setIsError(true);
       setMessage(error instanceof Error ? error.message : "요청을 처리하지 못했습니다.");
-      stopLoading();
     } finally {
       setLoading(false);
     }

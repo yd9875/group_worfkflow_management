@@ -45,15 +45,17 @@ export async function SchedulePage({ organizationId, view, search }: { organizat
   const selectedCategories = many(search.category);
   const department = one(search.department);
   const member = one(search.member);
-  const context = await getScheduleContext(organizationId);
-  const schedules = await listSchedules({
-    organizationId,
-    date: selectedDate,
-    view,
-    categories: selectedCategories,
-    departmentId: department,
-    memberId: member,
-  });
+  const [context, schedules] = await Promise.all([
+    getScheduleContext(organizationId),
+    listSchedules({
+      organizationId,
+      date: selectedDate,
+      view,
+      categories: selectedCategories,
+      departmentId: department,
+      memberId: member,
+    }),
+  ]);
   const weekStart = startOfWeek(selectedDate, { weekStartsOn: 1 });
   const weekDays = Array.from({ length: 7 }, (_, index) => addDays(weekStart, index));
   const monthStart = startOfWeek(startOfMonth(selectedDate), { weekStartsOn: 1 });

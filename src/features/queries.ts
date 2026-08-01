@@ -207,22 +207,24 @@ export async function getReportData(
   view: "day" | "week" | "month",
 ) {
   const membership = await requireMembership(organizationId, ["OWNER", "ADMIN"]);
-  const schedules = await listSchedules({ organizationId, date, view });
-  const organization = await prisma.organization.findUniqueOrThrow({
-    where: { id: organizationId },
-    select: {
-      name: true,
-      reportReference: true,
-      reportReferencePrinciples: {
-        select: { id: true, content: true },
-        orderBy: { createdAt: "asc" },
+  const [schedules, organization] = await Promise.all([
+    listSchedules({ organizationId, date, view }),
+    prisma.organization.findUniqueOrThrow({
+      where: { id: organizationId },
+      select: {
+        name: true,
+        reportReference: true,
+        reportReferencePrinciples: {
+          select: { id: true, content: true },
+          orderBy: { createdAt: "asc" },
+        },
+        reportReferenceFiles: {
+          select: { fileName: true, mimeType: true, size: true, objectKey: true },
+          orderBy: { createdAt: "asc" },
+        },
       },
-      reportReferenceFiles: {
-        select: { fileName: true, mimeType: true, size: true, objectKey: true },
-        orderBy: { createdAt: "asc" },
-      },
-    },
-  });
+    }),
+  ]);
   return { membership, schedules, organization };
 }
 

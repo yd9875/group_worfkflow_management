@@ -1,8 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
 import { useFormStatus } from "react-dom";
-import { useGlobalLoading } from "@/components/global-loading";
 
 export function ConfirmSubmitButton({
   children,
@@ -14,12 +12,6 @@ export function ConfirmSubmitButton({
   message: string;
 }) {
   const { pending } = useFormStatus();
-  const { startLoading, stopLoading } = useGlobalLoading();
-
-  useEffect(() => {
-    if (pending) startLoading(30000);
-    else stopLoading();
-  }, [pending, startLoading, stopLoading]);
 
   return (
     <button
