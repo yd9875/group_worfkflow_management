@@ -19,17 +19,29 @@ const viewCopy = {
   month: { title: "월간 일정표", eyebrow: "Printable monthly calendar" },
 } as const;
 
+type SearchValue = string | string[] | undefined;
+
+function one(value: SearchValue) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function many(value: SearchValue) {
+  return value ? (Array.isArray(value) ? value : [value]) : [];
+}
+
 export default async function PrintPage({
   params,
   searchParams,
 }: {
   params: Promise<{ organizationId: string }>;
-  searchParams: Promise<Record<string, string | undefined>>;
+  searchParams: Promise<Record<string, SearchValue>>;
 }) {
   const [{ organizationId }, search] = await Promise.all([params, searchParams]);
-  const view = search.view === "day" || search.view === "month" ? search.view : "week";
-  const selectedDate = search.date && /^\d{4}-\d{2}-\d{2}$/.test(search.date)
-    ? new Date(`${search.date}T12:00:00`)
+  const viewParam = one(search.view);
+  const view = viewParam === "day" || viewParam === "month" ? viewParam : "week";
+  const dateParam = one(search.date);
+  const selectedDate = dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)
+    ? new Date(`${dateParam}T12:00:00`)
     : new Date();
   const weekStart = startOfWeek(selectedDate, { weekStartsOn: 1 });
   const weekDays = Array.from({ length: 7 }, (_, index) => addDays(weekStart, index));
@@ -41,9 +53,9 @@ export default async function PrintPage({
     organizationId,
     date: selectedDate,
     view,
-    category: search.category,
-    departmentId: search.department,
-    memberId: search.member,
+    categories: many(search.category),
+    departmentId: one(search.department),
+    memberId: one(search.member),
   });
   const profileNames = new Map(
     context.members.map((member) => [member.userId, member.profileName?.trim() || member.user.name]),

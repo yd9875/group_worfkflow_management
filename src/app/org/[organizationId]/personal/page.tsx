@@ -18,17 +18,16 @@ import {
 } from "lucide-react";
 import {
   createPersonalDailyMemoAction,
-  createPersonalEntryAction,
   deletePersonalDailyMemoAction,
   deleteScheduleAction,
   movePersonalEntryAction,
   toggleTaskCompleteAction,
   updatePersonalDailyMemoAction,
-  updateScheduleAction,
 } from "@/features/actions";
 import { getPlannerData } from "@/features/queries";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { DatePickerNavigation } from "@/components/date-picker-navigation";
+import { PersonalEntryForm, type PersonalEntryFormItem } from "@/components/personal-entry-form";
 import { SubmitButton } from "@/components/submit-button";
 
 const categoryLabel: Record<string, string> = {
@@ -44,78 +43,23 @@ const categoryLabel: Record<string, string> = {
 type PlannerData = Awaited<ReturnType<typeof getPlannerData>>;
 type PlannerItem = PlannerData["items"][number];
 
-function dateTimeValue(value: Date) {
-  return format(value, "yyyy-MM-dd'T'HH:mm");
-}
-
-function EntryForm({
-  organizationId,
-  date,
-  itemType,
-  item,
-  closeHref,
-}: {
-  organizationId: string;
-  date: string;
-  itemType: "SCHEDULE" | "TASK";
-  item?: PlannerItem | null;
-  closeHref: string;
-}) {
-  const editing = Boolean(item);
-  const startDefault = item ? dateTimeValue(item.startsAt) : `${date}T09:00`;
-  const endDefault = item ? dateTimeValue(item.endsAt) : `${date}T10:00`;
-  const formAction = item ? updateScheduleAction : createPersonalEntryAction;
-  const isTask = itemType === "TASK";
-
-  return (
-    <form action={formAction} className={`rounded-2xl border p-5 shadow-sm ${isTask ? "border-amber-200 bg-amber-50/40" : "border-emerald-200 bg-emerald-50/40"}`}>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          {isTask ? <ClipboardPlus className="text-amber-700" size={19} /> : <CalendarPlus2 className="text-[var(--brand)]" size={19} />}
-          <h3 className="font-extrabold">{editing ? `${isTask ? "업무" : "일정"} 수정` : `새 ${isTask ? "업무" : "일정"}`}</h3>
-        </div>
-        <Link className="btn btn-quiet min-h-8 px-2 py-1 text-xs" href={closeHref}>닫기</Link>
-      </div>
-      <input type="hidden" name="organizationId" value={organizationId} />
-      <input type="hidden" name="returnDate" value={date} />
-      <input type="hidden" name="itemType" value={itemType} />
-      {item && <input type="hidden" name="scheduleId" value={item.id} />}
-      {isTask && <input type="hidden" name="category" value="GENERAL" />}
-
-      <div className="mt-4 grid gap-4">
-        <div className={`grid gap-4 ${isTask ? "" : "sm:grid-cols-[10rem_minmax(0,1fr)]"}`}>
-          {!isTask && (
-            <label className="label">유형
-              <select className="field" name="category" defaultValue={item?.category ?? "GENERAL"}>
-                {Object.entries(categoryLabel).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-              </select>
-            </label>
-          )}
-          <label className="label">제목<input className="field" name="title" defaultValue={item?.title ?? ""} maxLength={100} required /></label>
-        </div>
-
-        {!isTask && (
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="label">시작 일시<input className="field" name="startsAt" type="datetime-local" defaultValue={startDefault} required /></label>
-            <label className="label">종료 일시<input className="field" name="endsAt" type="datetime-local" defaultValue={endDefault} required /></label>
-          </div>
-        )}
-
-        <label className="label">{isTask ? "업무 내용" : "상세 내용"}<textarea className="field min-h-24 resize-y" name="description" defaultValue={item?.description ?? ""} maxLength={2000} placeholder={isTask ? "해야 할 일을 구체적으로 적어주세요." : "장소, 참석자, 준비 사항 등을 적어주세요."} /></label>
-        <label className="label">메모<textarea className="field min-h-20 resize-y" name="memo" defaultValue={item?.memo ?? ""} maxLength={4000} placeholder={isTask ? "준비물이나 후속 작업" : "일정과 관련된 개인 메모"} /></label>
-
-        <div className="flex flex-wrap gap-x-6 gap-y-3 rounded-xl bg-white/80 p-4 text-sm">
-          <label className="flex items-center gap-2"><input className="size-4 accent-[var(--accent)]" type="checkbox" name="isImportant" defaultChecked={item?.isImportant ?? false} /> 중요 {isTask ? "업무" : "일정"}</label>
-          <label className="flex items-center gap-2"><input className="size-4 accent-[var(--brand)]" type="checkbox" name="showInSchedule" defaultChecked={item ? item.showInWeek || item.showInMonth : true} /> 일정표 표시</label>
-          {!isTask && <label className="flex items-center gap-2"><input className="size-4 accent-[var(--brand)]" type="checkbox" name="isAllDay" defaultChecked={item?.isAllDay ?? false} /> 종일</label>}
-          {isTask && <label className="flex items-center gap-2"><input className="size-4 accent-[var(--brand)]" type="checkbox" name="isCompleted" defaultChecked={item?.isCompleted ?? false} /> 업무 완료</label>}
-          {!isTask && <input type="hidden" name="isCompleted" value="off" />}
-        </div>
-
-        <div className="flex justify-end"><SubmitButton className="btn btn-primary" pendingLabel="저장 중…">{editing ? "수정 저장" : `${isTask ? "업무" : "일정"} 저장`}</SubmitButton></div>
-      </div>
-    </form>
-  );
+function toFormItem(item: PlannerItem | null | undefined): PersonalEntryFormItem | null {
+  if (!item) return null;
+  return {
+    id: item.id,
+    category: item.category,
+    title: item.title,
+    description: item.description,
+    memo: item.memo,
+    startsAt: format(item.startsAt, "yyyy-MM-dd'T'HH:mm"),
+    endsAt: format(item.endsAt, "yyyy-MM-dd'T'HH:mm"),
+    isAllDay: item.isAllDay,
+    isImportant: item.isImportant,
+    showInWeek: item.showInWeek,
+    showInMonth: item.showInMonth,
+    isCompleted: item.isCompleted,
+    departmentId: item.departmentId,
+  };
 }
 
 function MoveButton({ organizationId, date, itemId, direction, disabled }: {
@@ -189,7 +133,7 @@ export default async function PersonalPlannerPage({ params, searchParams }: {
 }) {
   const [{ organizationId }, search] = await Promise.all([params, searchParams]);
   const selectedDate = search.date && /^\d{4}-\d{2}-\d{2}$/.test(search.date) ? new Date(`${search.date}T12:00:00`) : new Date();
-  const { items, editItem, personalMemos } = await getPlannerData(organizationId, selectedDate, search.edit);
+  const { membership, items, editItem, personalMemos } = await getPlannerData(organizationId, selectedDate, search.edit);
   const date = format(selectedDate, "yyyy-MM-dd");
   const schedules = items.filter((item) => item.itemType === "SCHEDULE");
   const tasks = items.filter((item) => item.itemType === "TASK");
@@ -229,13 +173,13 @@ export default async function PersonalPlannerPage({ params, searchParams }: {
 
       <section className="card grid gap-4 p-5 sm:p-6">
         <div className="flex items-center justify-between gap-3"><div><p className="eyebrow">Schedule</p><h2 className="mt-1 text-xl font-extrabold">일정</h2></div><span className="badge badge-green">{schedules.length}개</span></div>
-        {showScheduleForm && <EntryForm organizationId={organizationId} date={date} itemType="SCHEDULE" item={editItem?.itemType === "SCHEDULE" ? editItem : null} closeHref={closeFormHref("schedule")} />}
+        {showScheduleForm && <PersonalEntryForm key={editItem?.itemType === "SCHEDULE" ? editItem.id : "new-schedule"} organizationId={organizationId} date={date} itemType="SCHEDULE" item={toFormItem(editItem?.itemType === "SCHEDULE" ? editItem : null)} closeHref={closeFormHref("schedule")} department={membership.department} />}
         <div className="grid gap-3">{schedules.map((item, index) => <EntryCard organizationId={organizationId} date={date} item={item} index={index} total={schedules.length} key={item.id} />)}{!schedules.length && !showScheduleForm && <p className="muted rounded-xl bg-slate-50 py-8 text-center text-sm">등록된 일정이 없습니다. 위의 일정 추가 버튼으로 시작하세요.</p>}</div>
       </section>
 
       <section className="card grid gap-4 p-5 sm:p-6">
         <div className="flex items-center justify-between gap-3"><div><p className="eyebrow">Tasks</p><h2 className="mt-1 text-xl font-extrabold">업무</h2></div><span className="badge badge-orange">{tasks.length}개</span></div>
-        {showTaskForm && <EntryForm organizationId={organizationId} date={date} itemType="TASK" item={editItem?.itemType === "TASK" ? editItem : null} closeHref={closeFormHref("task")} />}
+        {showTaskForm && <PersonalEntryForm key={editItem?.itemType === "TASK" ? editItem.id : "new-task"} organizationId={organizationId} date={date} itemType="TASK" item={toFormItem(editItem?.itemType === "TASK" ? editItem : null)} closeHref={closeFormHref("task")} department={membership.department} />}
         <div className="grid gap-3">{tasks.map((item, index) => <EntryCard organizationId={organizationId} date={date} item={item} index={index} total={tasks.length} key={item.id} />)}{!tasks.length && !showTaskForm && <p className="muted rounded-xl bg-slate-50 py-8 text-center text-sm">등록된 업무가 없습니다. 위의 업무 추가 버튼으로 시작하세요.</p>}</div>
       </section>
 

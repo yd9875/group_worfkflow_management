@@ -46,9 +46,13 @@ const categoryLabel: Record<string, string> = {
 const externalCategories = new Set(["OUTING", "BUSINESS_TRIP", "TRAINING"]);
 
 function belongsToRow(schedule: ScheduleItem, row: Row) {
-  if (schedule.scope === "PERSONAL") return row.kind === "common";
   if (schedule.category === "LEAVE") return row.kind === "leave";
   if (externalCategories.has(schedule.category)) return row.kind === "external";
+  if (schedule.scope === "PERSONAL") {
+    return schedule.departmentId
+      ? row.kind === "department" && schedule.departmentId === row.departmentId
+      : row.kind === "common";
+  }
   if (schedule.scope === "ORGANIZATION") return row.kind === "common";
   return schedule.scope === "DEPARTMENT" && row.kind === "department" && schedule.departmentId === row.departmentId;
 }
@@ -108,7 +112,7 @@ export function WeekBoard({ organizationId, days, departments, schedules }: { or
       <div className="week-grid">
         <div className="week-cell week-head week-label grid place-items-center font-extrabold">구분</div>
         {days.map((day) => <div key={day.toISOString()} className={`week-cell week-head grid place-items-center ${isToday(day) ? "today" : ""}`}><span className="text-sm font-extrabold">{format(day, "M.d")}</span><span className="muted text-xs">{format(day, "EEE", { locale: ko })}</span></div>)}
-        {rows.map((row) => <div key={row.id} className="contents"><div className="week-cell week-label flex items-center font-bold">{row.label}</div>{days.map((day) => { const items = schedules.filter((schedule) => belongsToRow(schedule, row) && occursOnDay(schedule, day)); return <div key={`${row.id}-${day.toISOString()}`} className={`week-cell ${isToday(day) ? "today" : ""}`}>{items.slice(0, 3).map((schedule) => <Item key={schedule.id} schedule={schedule} organizationId={organizationId} rowKind={row.kind} />)}{items.length > 3 && <span className="muted px-1 text-xs font-bold">+{items.length - 3}개</span>}</div>; })}</div>)}
+        {rows.map((row) => <div key={row.id} className="contents"><div className="week-cell week-label flex items-center font-bold">{row.label}</div>{days.map((day) => { const items = schedules.filter((schedule) => belongsToRow(schedule, row) && occursOnDay(schedule, day)); return <div key={`${row.id}-${day.toISOString()}`} className={`week-cell ${isToday(day) ? "today" : ""}`}>{items.map((schedule) => <Item key={schedule.id} schedule={schedule} organizationId={organizationId} rowKind={row.kind} />)}</div>; })}</div>)}
       </div>
     </div>
   );
@@ -118,7 +122,7 @@ export function MonthBoard({ organizationId, days, currentMonth, schedules }: { 
   return (
     <div className="schedule-scroll" aria-label="월간 캘린더"><div className="month-grid">
       {["월", "화", "수", "목", "금", "토", "일"].map((label) => <div key={label} className="month-cell month-head">{label}</div>)}
-      {days.map((day) => { const items = schedules.filter((schedule) => occursOnDay(schedule, day)); return <div key={day.toISOString()} className={`month-cell ${isToday(day) ? "today" : ""} ${day.getMonth() !== currentMonth ? "opacity-45" : ""}`}><p className="mb-2 text-sm font-extrabold">{format(day, "d")}</p>{items.slice(0, 3).map((schedule) => <Item key={schedule.id} schedule={schedule} organizationId={organizationId} />)}{items.length > 3 && <span className="muted text-xs font-bold">+{items.length - 3}개</span>}</div>; })}
+      {days.map((day) => { const items = schedules.filter((schedule) => occursOnDay(schedule, day)); return <div key={day.toISOString()} className={`month-cell ${isToday(day) ? "today" : ""} ${day.getMonth() !== currentMonth ? "opacity-45" : ""}`}><p className="mb-2 text-sm font-extrabold">{format(day, "d")}</p>{items.map((schedule) => <Item key={schedule.id} schedule={schedule} organizationId={organizationId} />)}</div>; })}
     </div></div>
   );
 }
@@ -147,16 +151,22 @@ export function DayBoard({ organizationId, day, departments, schedules }: {
             <div className="contents" key={row.id}>
               <div className="day-cell day-label flex items-start pt-5 font-bold">{row.label}</div>
               <div className={`day-cell grid gap-3 ${isToday(day) ? "today" : ""}`}>
-                {items.map((schedule) => (
+                {row.kind === "leave" ? items.map((schedule) => (
+                  <Item key={schedule.id} schedule={schedule} organizationId={organizationId} rowKind="leave" />
+                )) : items.map((schedule) => (
                   <article className={`rounded-xl border border-[var(--line)] bg-white p-4 shadow-sm ${schedule.isCompleted ? "opacity-60" : ""}`} key={schedule.id}>
                     <div className="flex flex-wrap items-start justify-between gap-4">
                       <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2"><span className="badge badge-green">{schedule.itemType === "TASK" ? "업무" : categoryLabel[schedule.category] ?? schedule.category}</span>{schedule.departmentName && <span className="badge badge-gray">{schedule.departmentName}</span>}{schedule.scope === "PERSONAL" && <span className="badge badge-orange">개인</span>}{schedule.isImportant && <span className="badge badge-orange"><Flag size={12} /> 중요</span>}{schedule.isCompleted && <span className="badge badge-green"><CheckCircle2 size={12} /> 완료</span>}</div>
-                        <h2 className={`mt-3 text-lg font-extrabold ${schedule.isCompleted ? "line-through" : ""}`}>{schedule.title}</h2>
-                        <p className="muted mt-2 flex flex-wrap items-center gap-2 text-sm"><Clock3 size={15} /> {schedule.isAllDay ? "종일" : `${format(schedule.startsAt, "HH:mm")} – ${format(schedule.endsAt, "HH:mm")}`}<span>·</span><span>{schedule.targetUserName || schedule.creatorProfileName || "담당자 없음"}</span></p>
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <span className="badge badge-green">{schedule.itemType === "TASK" ? "업무" : categoryLabel[schedule.category] ?? schedule.category}</span>
+                          <h2 className={`text-lg font-extrabold ${schedule.isCompleted ? "line-through" : ""}`}>{schedule.title}</h2>
+                          <span className="muted flex flex-wrap items-center gap-2 text-sm"><Clock3 size={15} /> {schedule.isAllDay ? "종일" : `${format(schedule.startsAt, "HH:mm")} – ${format(schedule.endsAt, "HH:mm")}`}<span>·</span><span>{schedule.targetUserName || schedule.creatorProfileName || "담당자 없음"}</span></span>
+                          {schedule.departmentName && <span className="badge badge-gray">{schedule.departmentName}</span>}
+                          {schedule.isImportant && <span className="badge badge-orange"><Flag size={12} /> 중요</span>}
+                          {schedule.isCompleted && <span className="badge badge-green"><CheckCircle2 size={12} /> 완료</span>}
+                        </div>
                         {schedule.description && <p className="mt-3 whitespace-pre-wrap text-sm leading-6">{schedule.description}</p>}
                         {schedule.scope !== "PERSONAL" && schedule.memo && <div className="mt-3 rounded-xl bg-amber-50 p-3 text-sm leading-6 text-amber-900"><StickyNote className="mr-2 inline" size={15} />{schedule.memo}</div>}
-                        {schedule.scope === "PERSONAL" && <p className="muted mt-3 text-xs">일정표 표시 {schedule.showInWeek ? "켜짐" : "꺼짐"}</p>}
                       </div>
                       <div className="flex flex-wrap gap-2 no-print">
                         {schedule.itemType === "TASK" && <form action={toggleTaskCompleteAction}><input type="hidden" name="organizationId" value={organizationId} /><input type="hidden" name="scheduleId" value={schedule.id} /><SubmitButton className="btn btn-secondary" pendingLabel="변경 중…"><CheckCircle2 size={16} /> {schedule.isCompleted ? "미완료로" : "완료"}</SubmitButton></form>}

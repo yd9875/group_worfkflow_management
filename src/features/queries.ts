@@ -75,7 +75,7 @@ export async function listSchedules(input: {
   organizationId: string;
   date: Date;
   view: "day" | "week" | "month";
-  category?: string;
+  categories?: string[];
   departmentId?: string;
   memberId?: string;
 }) {
@@ -112,11 +112,13 @@ export async function listSchedules(input: {
   const scheduleCategories = new Set([
     "GENERAL", "MEETING", "TRAINING", "LEAVE", "BUSINESS_TRIP", "OUTING", "OTHER",
   ]);
-  const categoryFilter: Prisma.ScheduleWhereInput = input.category === "EXTERNAL"
-    ? { category: { in: ["OUTING", "BUSINESS_TRIP", "TRAINING"] } }
-    : input.category && scheduleCategories.has(input.category)
-      ? { category: input.category as ScheduleCategory }
-      : {};
+  const selectedCategories = (input.categories ?? []).filter((category) => scheduleCategories.has(category));
+  const categoryOptions: Prisma.ScheduleWhereInput[] = [];
+  if (selectedCategories.length) {
+    categoryOptions.push({ itemType: "SCHEDULE", category: { in: selectedCategories as ScheduleCategory[] } });
+  }
+  if (input.categories?.includes("TASK")) categoryOptions.push({ itemType: "TASK" });
+  const categoryFilter: Prisma.ScheduleWhereInput = categoryOptions.length ? { OR: categoryOptions } : {};
 
   return prisma.schedule.findMany({
     where: {

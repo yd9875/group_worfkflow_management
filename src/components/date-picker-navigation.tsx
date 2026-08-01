@@ -28,7 +28,7 @@ export function DatePickerNavigation({
   basePath: string;
   date: string;
   label: string;
-  query?: Record<string, string | undefined>;
+  query?: Record<string, string | string[] | undefined>;
 }) {
   const router = useRouter();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -59,7 +59,8 @@ export function DatePickerNavigation({
     const params = new URLSearchParams();
     params.set("date", format(nextDate, "yyyy-MM-dd"));
     Object.entries(query).forEach(([key, value]) => {
-      if (value) params.set(key, value);
+      if (Array.isArray(value)) value.forEach((item) => params.append(key, item));
+      else if (value) params.set(key, value);
     });
     setOpen(false);
     router.push(`${basePath}?${params.toString()}`);

@@ -348,6 +348,7 @@ const personalEntrySchema = z.object({
   title: z.string().trim().min(1).max(100),
   description: z.string().trim().max(2000).optional(),
   memo: z.string().trim().max(4000).optional(),
+  departmentId: z.string().uuid().nullable(),
   startsAt: z.coerce.date(),
   endsAt: z.coerce.date(),
   category: z.enum([
@@ -370,6 +371,8 @@ const personalEntrySchema = z.object({
 
 function personalEntryInput(formData: FormData) {
   const itemType = text(formData, "itemType");
+  const category = text(formData, "category");
+  const isLeave = itemType === "SCHEDULE" && category === "LEAVE";
   const returnDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(text(formData, "returnDate"));
   const taskStartsAt = new Date(`${returnDate}T00:00:00+09:00`);
   const taskEndsAt = new Date(taskStartsAt.getTime() + 24 * 60 * 60 * 1000);
@@ -378,13 +381,14 @@ function personalEntryInput(formData: FormData) {
     title: text(formData, "title"),
     description: text(formData, "description") || undefined,
     memo: text(formData, "memo") || undefined,
-    startsAt: itemType === "TASK" ? taskStartsAt : text(formData, "startsAt"),
-    endsAt: itemType === "TASK" ? taskEndsAt : text(formData, "endsAt"),
-    category: text(formData, "category"),
-    isAllDay: itemType === "TASK" || formData.get("isAllDay") === "on",
-    isImportant: formData.get("isImportant") === "on",
-    showInSchedule: formData.get("showInSchedule") === "on",
-    isCompleted: formData.get("isCompleted") === "on",
+    departmentId: text(formData, "departmentId") || null,
+    startsAt: itemType === "TASK" || isLeave ? taskStartsAt : text(formData, "startsAt"),
+    endsAt: itemType === "TASK" || isLeave ? taskEndsAt : text(formData, "endsAt"),
+    category,
+    isAllDay: itemType === "TASK" || isLeave || formData.get("isAllDay") === "on",
+    isImportant: !isLeave && formData.get("isImportant") === "on",
+    showInSchedule: isLeave || formData.get("showInSchedule") === "on",
+    isCompleted: !isLeave && formData.get("isCompleted") === "on",
   });
 }
 
@@ -399,7 +403,10 @@ export async function createPersonalEntryAction(formData: FormData) {
   const organizationId = text(formData, "organizationId");
   const membership = await requireMembership(organizationId);
   const input = personalEntryInput(formData);
-  const { showInSchedule, ...entryInput } = input;
+  if (input.departmentId && (membership.department.isSystem || input.departmentId !== membership.departmentId)) {
+    throw new AppError("VALIDATION_ERROR", "표시 위치는 공통사항 또는 본인이 속한 부서만 선택할 수 있습니다.");
+  }
+  const { showInSchedule, departmentId, ...entryInput } = input;
   const lastEntry = await prisma.schedule.aggregate({
     where: {
       organizationId,
@@ -416,7 +423,7 @@ export async function createPersonalEntryAction(formData: FormData) {
       createdByUserId: membership.userId,
       updatedByUserId: membership.userId,
       targetUserId: membership.userId,
-      departmentId: null,
+      departmentId,
       scope: "PERSONAL",
       ...entryInput,
       showInWeek: showInSchedule,
@@ -453,7 +460,10 @@ export async function updateScheduleAction(formData: FormData) {
     throw new AppError("FORBIDDEN", "이 항목을 수정할 권한이 없습니다.", 403);
   }
   const input = personalEntryInput(formData);
-  const { showInSchedule, ...entryInput } = input;
+  if (input.departmentId && (membership.department.isSystem || input.departmentId !== membership.departmentId)) {
+    throw new AppError("VALIDATION_ERROR", "표시 위치는 공통사항 또는 본인이 속한 부서만 선택할 수 있습니다.");
+  }
+  const { showInSchedule, departmentId, ...entryInput } = input;
   await prisma.$transaction([
     prisma.schedule.update({
       where: { id: schedule.id },
@@ -463,6 +473,7 @@ export async function updateScheduleAction(formData: FormData) {
         memo: input.memo || null,
         showInWeek: showInSchedule,
         showInMonth: showInSchedule,
+        departmentId: schedule.scope === "PERSONAL" ? departmentId : schedule.departmentId,
         itemType: schedule.scope === "PERSONAL" ? input.itemType : schedule.itemType,
         category:
           schedule.scope === "PERSONAL" && input.itemType === "TASK"

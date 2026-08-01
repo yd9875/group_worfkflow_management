@@ -6,12 +6,24 @@ import { getScheduleContext, listSchedules } from "@/features/queries";
 import { DayBoard, MonthBoard, ScheduleItem, WeekBoard } from "@/components/schedule-board";
 import { DatePickerNavigation } from "@/components/date-picker-navigation";
 
+type SearchValue = string | string[] | undefined;
 type Search = {
-  date?: string;
-  category?: string;
-  department?: string;
-  member?: string;
+  date?: SearchValue;
+  category?: SearchValue;
+  department?: SearchValue;
+  member?: SearchValue;
 };
+
+const categoryOptions = [
+  ["GENERAL", "일반"],
+  ["MEETING", "회의"],
+  ["TRAINING", "교육"],
+  ["BUSINESS_TRIP", "출장"],
+  ["OUTING", "외근"],
+  ["OTHER", "기타"],
+  ["LEAVE", "휴가"],
+  ["TASK", "업무"],
+] as const;
 
 const viewCopy = {
   day: { eyebrow: "Daily plan", title: "일일 계획" },
@@ -19,16 +31,28 @@ const viewCopy = {
   month: { eyebrow: "Monthly calendar", title: "월간 일정표" },
 } as const;
 
+function one(value: SearchValue) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function many(value: SearchValue) {
+  return value ? (Array.isArray(value) ? value : [value]) : [];
+}
+
 export async function SchedulePage({ organizationId, view, search }: { organizationId: string; view: "day" | "week" | "month"; search: Search }) {
-  const selectedDate = search.date && /^\d{4}-\d{2}-\d{2}$/.test(search.date) ? new Date(`${search.date}T12:00:00`) : new Date();
+  const dateParam = one(search.date);
+  const selectedDate = dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? new Date(`${dateParam}T12:00:00`) : new Date();
+  const selectedCategories = many(search.category);
+  const department = one(search.department);
+  const member = one(search.member);
   const context = await getScheduleContext(organizationId);
   const schedules = await listSchedules({
     organizationId,
     date: selectedDate,
     view,
-    category: search.category,
-    departmentId: search.department,
-    memberId: search.member,
+    categories: selectedCategories,
+    departmentId: department,
+    memberId: member,
   });
   const weekStart = startOfWeek(selectedDate, { weekStartsOn: 1 });
   const weekDays = Array.from({ length: 7 }, (_, index) => addDays(weekStart, index));
@@ -37,7 +61,7 @@ export async function SchedulePage({ organizationId, view, search }: { organizat
   const monthDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
   const previous = view === "day" ? addDays(selectedDate, -1) : view === "week" ? addWeeks(selectedDate, -1) : addMonths(selectedDate, -1);
   const next = view === "day" ? addDays(selectedDate, 1) : view === "week" ? addWeeks(selectedDate, 1) : addMonths(selectedDate, 1);
-  const profileNames = new Map(context.members.map((member) => [member.userId, member.profileName?.trim() || member.user.name]));
+  const profileNames = new Map(context.members.map((item) => [item.userId, item.profileName?.trim() || item.user.name]));
   const serialized: ScheduleItem[] = schedules.map((schedule) => ({
     ...schedule,
     departmentName: schedule.department?.name ?? null,
@@ -45,12 +69,11 @@ export async function SchedulePage({ organizationId, view, search }: { organizat
     creatorProfileName: schedule.createdByUserId ? profileNames.get(schedule.createdByUserId) ?? schedule.createdBy?.name ?? null : null,
   }));
   const dateValue = format(selectedDate, "yyyy-MM-dd");
-  const visibleSchedules = serialized;
   const querySuffix = (date: Date, keepFilters = true) => {
     const params = new URLSearchParams({ date: format(date, "yyyy-MM-dd") });
-    if (keepFilters && search.category) params.set("category", search.category);
-    if (keepFilters && search.department) params.set("department", search.department);
-    if (keepFilters && search.member) params.set("member", search.member);
+    if (keepFilters) selectedCategories.forEach((category) => params.append("category", category));
+    if (keepFilters && department) params.set("department", department);
+    if (keepFilters && member) params.set("member", member);
     return params.toString();
   };
   const periodLabel = view === "day"
@@ -75,7 +98,7 @@ export async function SchedulePage({ organizationId, view, search }: { organizat
                 basePath={`/org/${organizationId}/schedule/day`}
                 date={dateValue}
                 label={periodLabel}
-                query={{ category: search.category, department: search.department, member: search.member }}
+                query={{ category: selectedCategories, department, member }}
               />
             ) : <p className="muted min-w-0 px-1 font-bold">{periodLabel}</p>}
             <Link className="period-arrow no-print" href={`/org/${organizationId}/schedule/${view}?${querySuffix(next)}`} aria-label="다음 기간"><ChevronRight size={18} /></Link>
@@ -89,22 +112,30 @@ export async function SchedulePage({ organizationId, view, search }: { organizat
 
       <form method="get" action={`/org/${organizationId}/schedule/${view}`} className="card no-print flex flex-wrap items-end gap-3 p-4">
         <input type="hidden" name="date" value={dateValue} />
-        <SlidersHorizontal className="mb-2 text-[var(--brand)]" size={19} />
-        <label className="label min-w-36 flex-1">일정 유형<select className="field" name="category" defaultValue={search.category ?? ""}><option value="">전체 유형</option><option value="LEAVE">휴가</option><option value="EXTERNAL">외부 일정</option><option value="MEETING">회의</option><option value="GENERAL">일반</option><option value="OTHER">기타</option></select></label>
-        <label className="label min-w-36 flex-1">부서<select className="field" name="department" defaultValue={search.department ?? ""}><option value="">전체 부서</option>{context.departments.filter((department) => !department.isSystem).map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}</select></label>
-        <label className="label min-w-36 flex-1">구성원<select className="field" name="member" defaultValue={search.member ?? ""}><option value="">전체 구성원</option>{context.members.map((member) => <option key={member.userId} value={member.userId}>{member.profileName?.trim() || member.user.name}</option>)}</select></label>
+        <fieldset className="min-w-full">
+          <legend className="label flex items-center gap-2"><SlidersHorizontal className="text-[var(--brand)]" size={18} /> 일정 유형</legend>
+          <div className="mt-2 flex flex-wrap gap-x-5 gap-y-2 rounded-xl bg-slate-50 p-3 text-sm">
+            {categoryOptions.map(([value, label]) => (
+              <label className="flex items-center gap-2" key={value}>
+                <input className="size-4 accent-[var(--brand)]" type="checkbox" name="category" value={value} defaultChecked={selectedCategories.includes(value)} /> {label}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+        <label className="label min-w-36 flex-1">부서<select className="field" name="department" defaultValue={department ?? ""}><option value="">전체 부서</option>{context.departments.filter((item) => !item.isSystem).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+        <label className="label min-w-36 flex-1">구성원<select className="field" name="member" defaultValue={member ?? ""}><option value="">전체 구성원</option>{context.members.map((item) => <option key={item.userId} value={item.userId}>{item.profileName?.trim() || item.user.name}</option>)}</select></label>
         <button className="btn btn-secondary" type="submit">필터 적용</button>
         <Link className="btn btn-quiet" href={`/org/${organizationId}/schedule/${view}?date=${dateValue}`}>초기화</Link>
       </form>
 
       {view === "day" ? (
-        <DayBoard organizationId={organizationId} day={selectedDate} departments={context.departments.map(({ id, name, isSystem }) => ({ id, name, isSystem }))} schedules={visibleSchedules} />
+        <DayBoard organizationId={organizationId} day={selectedDate} departments={context.departments.map(({ id, name, isSystem }) => ({ id, name, isSystem }))} schedules={serialized} />
       ) : view === "week" ? (
         <WeekBoard organizationId={organizationId} days={weekDays} departments={context.departments.map(({ id, name, isSystem }) => ({ id, name, isSystem }))} schedules={serialized} />
       ) : (
         <MonthBoard organizationId={organizationId} days={monthDays} currentMonth={selectedDate.getMonth()} schedules={serialized} />
       )}
-      {!visibleSchedules.length && <div className="card p-8 text-center"><CalendarDays className="mx-auto text-[var(--brand)]" /><p className="mt-3 font-bold">표시할 일정이 없습니다</p><p className="muted mt-1 text-sm">개인 일정 관리에서 일정이나 업무를 등록하거나 필터를 초기화해 보세요.</p><Link className="btn btn-primary mt-4" href={`/org/${organizationId}/personal?date=${dateValue}`}>개인 일정 관리 열기</Link></div>}
+      {!serialized.length && <div className="card p-8 text-center"><CalendarDays className="mx-auto text-[var(--brand)]" /><p className="mt-3 font-bold">표시할 일정이 없습니다</p><p className="muted mt-1 text-sm">개인 일정 관리에서 일정이나 업무를 등록하거나 필터를 초기화해 보세요.</p><Link className="btn btn-primary mt-4" href={`/org/${organizationId}/personal?date=${dateValue}`}>개인 일정 관리 열기</Link></div>}
     </div>
   );
 }

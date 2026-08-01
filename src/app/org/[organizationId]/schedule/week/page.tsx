@@ -5,7 +5,7 @@ export default async function WeekPage({
   searchParams,
 }: {
   params: Promise<{ organizationId: string }>;
-  searchParams: Promise<Record<string, string | undefined>>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const [{ organizationId }, search] = await Promise.all([params, searchParams]);
   return <SchedulePage organizationId={organizationId} view="week" search={search} />;
