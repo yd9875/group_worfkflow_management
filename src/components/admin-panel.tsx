@@ -8,11 +8,13 @@ import {
   rotateJoinCodeAction,
   updateDepartmentAction,
   updateMemberAction,
+  updateReportReferenceAction,
 } from "@/features/actions";
 import { getAdminData } from "@/features/queries";
-import { Building2, ClipboardCheck, KeyRound } from "lucide-react";
+import { Building2, ClipboardCheck, FileText, KeyRound } from "lucide-react";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { SubmitButton } from "@/components/submit-button";
+import { AiConnectionSettings } from "@/components/ai-connection-settings";
 
 const roleLabel = { OWNER: "소유자", ADMIN: "관리자", MEMBER: "구성원" };
 
@@ -125,8 +127,8 @@ export async function AdminPanel({
   if (section === "requests") {
     return (
       <section>
-        <p className="eyebrow">Join requests</p>
-        <h1 className="page-title mt-1">가입 신청</h1>
+        <p className="eyebrow">Entry requests</p>
+        <h1 className="page-title mt-1">입장 신청</h1>
         <p className="muted mt-2">신청자의 부서를 지정한 뒤 승인하거나 신청을 거절합니다.</p>
         <div className="mt-6 grid gap-4">
           {data.requests.map((request) => (
@@ -200,12 +202,32 @@ export async function AdminPanel({
     const joinCode = await getJoinCode(organizationId);
     return (
       <section>
-        <p className="eyebrow">Organization settings</p><h1 className="page-title mt-1">조직 설정</h1>
-        <article className="card mt-6 max-w-2xl p-6">
-          <div className="flex items-center gap-3"><KeyRound className="text-[var(--brand)]" /><div><h2 className="font-extrabold">가입 코드</h2><p className="muted text-sm">코드를 공유하면 사용자가 가입을 신청할 수 있습니다.</p></div></div>
-          <p className="my-5 rounded-xl bg-slate-50 px-5 py-4 text-center font-mono text-2xl font-bold tracking-[.28em]">{joinCode}</p>
-          <form action={rotateJoinCodeAction}><input type="hidden" name="organizationId" value={organizationId} /><SubmitButton className="btn btn-danger" pendingLabel="재발급 중…">가입 코드 재발급</SubmitButton></form>
-        </article>
+        <p className="eyebrow">Organization settings</p><h1 className="page-title mt-1">조직 관리</h1>
+        <div className="mt-6 grid max-w-3xl gap-5">
+          <article className="card p-6">
+            <div className="flex items-center gap-3"><KeyRound className="text-[var(--brand)]" /><div><h2 className="font-extrabold">입장 코드</h2><p className="muted text-sm">코드를 공유하면 사용자가 조직 입장을 신청할 수 있습니다.</p></div></div>
+            <p className="my-5 rounded-xl bg-slate-50 px-5 py-4 text-center font-mono text-2xl font-bold tracking-[.28em]">{joinCode}</p>
+            <form action={rotateJoinCodeAction}><input type="hidden" name="organizationId" value={organizationId} /><SubmitButton className="btn btn-danger" pendingLabel="재발급 중…">입장 코드 재발급</SubmitButton></form>
+          </article>
+          <form action={updateReportReferenceAction} className="card p-6">
+            <div className="flex items-center gap-3"><FileText className="text-[var(--brand)]" /><div><h2 className="font-extrabold">AI 보고서 레퍼런스</h2><p className="muted text-sm">보고서에 반영할 조직 용어, 작성 원칙, 강조 지표와 예시를 등록하세요.</p></div></div>
+            <input type="hidden" name="organizationId" value={organizationId} />
+            <textarea className="field mt-5 min-h-48" name="reportReference" maxLength={12000} defaultValue={data.currentMembership.organization.reportReference ?? ""} placeholder="예: 임원 보고용 문체, 부서별 핵심 지표, 반드시 포함할 리스크 기준…" />
+            <SubmitButton className="btn btn-primary mt-3" pendingLabel="저장 중…">레퍼런스 저장</SubmitButton>
+          </form>
+          <AiConnectionSettings organizationId={organizationId} />
+          {data.currentMembership.role === "OWNER" && (
+            <section className="rounded-2xl border border-red-200 bg-red-50 p-5">
+              <h2 className="font-extrabold text-red-900">조직 삭제</h2>
+              <p className="mt-2 text-sm leading-6 text-red-800">모든 부서, 일정, 입장 신청, 알림과 감사 기록이 영구 삭제됩니다. 계속하려면 조직 이름을 입력하세요.</p>
+              <form action={deleteOrganizationAction} className="mt-4 flex flex-col gap-3 sm:flex-row">
+                <input type="hidden" name="organizationId" value={organizationId} />
+                <input className="field flex-1" name="confirmation" placeholder={data.currentMembership.organization.name} required />
+                <ConfirmSubmitButton className="btn btn-danger shrink-0" message="이 조직과 모든 데이터를 영구 삭제할까요? 되돌릴 수 없습니다.">조직 영구 삭제</ConfirmSubmitButton>
+              </form>
+            </section>
+          )}
+        </div>
       </section>
     );
   }
@@ -218,7 +240,7 @@ export async function AdminPanel({
 
   return (
     <section>
-      <p className="eyebrow">Organization management</p><h1 className="page-title mt-1">조직 관리</h1>
+      <p className="eyebrow">Member management</p><h1 className="page-title mt-1">구성원 관리</h1>
       <p className="muted mt-2">구성원의 부서와 역할을 관리합니다. 소유자 역할을 변경할 때는 조직을 이어받을 새 소유자를 선택해야 합니다.</p>
       <div className="admin-member-table card mt-6 overflow-x-auto">
         <table className="w-full min-w-[48rem] border-collapse text-left text-sm">
@@ -241,17 +263,6 @@ export async function AdminPanel({
           </article>
         ))}
       </div>
-      {data.currentMembership.role === "OWNER" && (
-        <section className="mt-8 rounded-2xl border border-red-200 bg-red-50 p-5">
-          <h2 className="font-extrabold text-red-900">조직 삭제</h2>
-          <p className="mt-2 text-sm leading-6 text-red-800">모든 부서, 일정, 가입 신청, 알림과 감사 기록이 영구 삭제됩니다. 계속하려면 조직 이름을 입력하세요.</p>
-          <form action={deleteOrganizationAction} className="mt-4 flex flex-col gap-3 sm:flex-row">
-            <input type="hidden" name="organizationId" value={organizationId} />
-            <input className="field flex-1" name="confirmation" placeholder={data.currentMembership.organization.name} required />
-            <ConfirmSubmitButton className="btn btn-danger shrink-0" message="이 조직과 모든 데이터를 영구 삭제할까요? 되돌릴 수 없습니다.">조직 영구 삭제</ConfirmSubmitButton>
-          </form>
-        </section>
-      )}
     </section>
   );
 }

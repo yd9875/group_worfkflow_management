@@ -93,6 +93,7 @@ textarea.field { min-height: 6rem; resize: vertical; }
 .week-head.week-label { z-index: 6; }
 .schedule-item { display: block; margin-bottom: .3rem; overflow: hidden; border-left: 3px solid var(--brand); border-radius: .42rem; background: var(--brand-soft); padding: .4rem .45rem; font-size: .76rem; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
 .schedule-item-important { border-left-color: var(--accent); background: #fff0e4; }
+.schedule-item-completed > summary { color: #7b8780; text-decoration: line-through; }
 .month-grid { display: grid; min-width: 56rem; grid-template-columns: repeat(7, 1fr); }
 .month-cell { min-height: 9.5rem; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: .55rem; }
 .month-head { min-height: auto; background: #f7f9f6; text-align: center; font-size: .8rem; font-weight: 750; }

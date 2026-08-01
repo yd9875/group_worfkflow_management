@@ -1,7 +1,8 @@
+import Link from "next/link";
 import { format, isToday } from "date-fns";
 import { ko } from "date-fns/locale";
-import { Flag, Trash2 } from "lucide-react";
-import { deleteScheduleAction } from "@/features/actions";
+import { CheckCircle2, Clock3, Flag, Pencil, StickyNote, Trash2 } from "lucide-react";
+import { deleteScheduleAction, toggleTaskCompleteAction } from "@/features/actions";
 import { SubmitButton } from "@/components/submit-button";
 
 export type ScheduleItem = {
@@ -14,6 +15,10 @@ export type ScheduleItem = {
   scope: "ORGANIZATION" | "DEPARTMENT" | "PERSONAL";
   category: string;
   isImportant: boolean;
+  showInWeek: boolean;
+  showInMonth: boolean;
+  isCompleted: boolean;
+  memo: string | null;
   itemType: "SCHEDULE" | "TASK";
   departmentId: string | null;
   departmentName: string | null;
@@ -25,7 +30,7 @@ export type ScheduleItem = {
 type Row = {
   id: string;
   label: string;
-  kind: "common" | "external" | "leave" | "department";
+  kind: "common" | "external" | "leave" | "department" | "personal";
   departmentId?: string;
 };
 
@@ -41,11 +46,11 @@ const categoryLabel: Record<string, string> = {
 const externalCategories = new Set(["OUTING", "BUSINESS_TRIP", "TRAINING"]);
 
 function belongsToRow(schedule: ScheduleItem, row: Row) {
+  if (schedule.scope === "PERSONAL") return row.kind === "personal";
   if (schedule.category === "LEAVE") return row.kind === "leave";
   if (externalCategories.has(schedule.category)) return row.kind === "external";
   if (schedule.scope === "ORGANIZATION") return row.kind === "common";
-  if (schedule.scope === "DEPARTMENT") return row.kind === "department" && schedule.departmentId === row.departmentId;
-  return false;
+  return schedule.scope === "DEPARTMENT" && row.kind === "department" && schedule.departmentId === row.departmentId;
 }
 
 function occursOnDay(schedule: ScheduleItem, day: Date) {
@@ -60,104 +65,81 @@ function itemSummary(schedule: ScheduleItem, rowKind?: Row["kind"]) {
     const name = schedule.targetUserName || schedule.creatorProfileName;
     return `${categoryLabel[schedule.category]}${name ? ` · ${name}` : ""}`;
   }
-  if (schedule.itemType === "TASK") return schedule.title;
-  return `${!schedule.isAllDay ? `${format(schedule.startsAt, "HH:mm")} ` : ""}${schedule.title}`;
+  return schedule.itemType === "TASK"
+    ? schedule.title
+    : `${!schedule.isAllDay ? `${format(schedule.startsAt, "HH:mm")} ` : ""}${schedule.title}`;
 }
 
-function Item({
-  schedule,
-  organizationId,
-  rowKind,
-}: {
-  schedule: ScheduleItem;
-  organizationId: string;
-  rowKind?: Row["kind"];
-}) {
+function Item({ schedule, organizationId, rowKind }: { schedule: ScheduleItem; organizationId: string; rowKind?: Row["kind"] }) {
   return (
-    <details className={`schedule-item ${schedule.isImportant ? "schedule-item-important" : ""}`} title={schedule.title}>
+    <details className={`schedule-item ${schedule.isImportant ? "schedule-item-important" : ""} ${schedule.isCompleted ? "schedule-item-completed" : ""}`} title={schedule.title}>
       <summary className="cursor-pointer list-none font-bold">
         {schedule.isImportant && <Flag className="mr-1 inline" size={11} />}
         {itemSummary(schedule, rowKind)}
       </summary>
       <div className="mt-2 whitespace-normal rounded-md bg-white/80 p-2 text-xs leading-5 shadow-sm">
         <p className="font-extrabold">{schedule.title}</p>
+        <p className="mt-1 text-slate-500">{categoryLabel[schedule.category] ?? schedule.category} · {schedule.isAllDay ? "종일" : `${format(schedule.startsAt, "HH:mm")}–${format(schedule.endsAt, "HH:mm")}`}</p>
         {schedule.description && <p className="mt-2">{schedule.description}</p>}
+        {schedule.memo && <p className="mt-2 flex items-start gap-1 text-slate-600"><StickyNote className="mt-0.5 shrink-0" size={12} /> {schedule.memo}</p>}
         <p className="mt-2 text-slate-500">등록: {schedule.creatorProfileName || "알 수 없음"}</p>
-        <form action={deleteScheduleAction} className="mt-2 no-print">
-          <input type="hidden" name="organizationId" value={organizationId} />
-          <input type="hidden" name="scheduleId" value={schedule.id} />
-          <SubmitButton className="btn btn-danger min-h-8 px-2 py-1 text-xs" pendingLabel="삭제 중…"><Trash2 size={12} /> 삭제</SubmitButton>
-        </form>
+        <div className="mt-2 flex flex-wrap gap-2 no-print">
+          <Link className="btn btn-secondary min-h-8 px-2 py-1 text-xs" href={`/org/${organizationId}/personal?date=${format(schedule.startsAt, "yyyy-MM-dd")}&edit=${schedule.id}`}><Pencil size={12} /> 수정</Link>
+          <form action={deleteScheduleAction}>
+            <input type="hidden" name="organizationId" value={organizationId} />
+            <input type="hidden" name="scheduleId" value={schedule.id} />
+            <SubmitButton className="btn btn-danger min-h-8 px-2 py-1 text-xs" pendingLabel="삭제 중…"><Trash2 size={12} /> 삭제</SubmitButton>
+          </form>
+        </div>
       </div>
     </details>
   );
 }
 
-export function WeekBoard({
-  organizationId,
-  days,
-  departments,
-  schedules,
-}: {
-  organizationId: string;
-  days: Date[];
-  departments: Array<{ id: string; name: string; isSystem: boolean }>;
-  schedules: ScheduleItem[];
-}) {
+export function WeekBoard({ organizationId, days, departments, schedules }: { organizationId: string; days: Date[]; departments: Array<{ id: string; name: string; isSystem: boolean }>; schedules: ScheduleItem[] }) {
   const rows: Row[] = [
     { id: "common", label: "공통사항", kind: "common" },
-    ...departments.filter((department) => !department.isSystem).map((department) => ({
-      id: `department-${department.id}`,
-      label: department.name,
-      kind: "department" as const,
-      departmentId: department.id,
-    })),
-    { id: "external", label: "외부 업무", kind: "external" },
+    ...departments.filter((department) => !department.isSystem).map((department) => ({ id: `department-${department.id}`, label: department.name, kind: "department" as const, departmentId: department.id })),
+    { id: "external", label: "외부 일정", kind: "external" },
     { id: "leave", label: "휴가", kind: "leave" },
+    { id: "personal", label: "개인 일정", kind: "personal" },
   ];
   return (
     <div className="schedule-scroll" aria-label="주간 일정표">
       <div className="week-grid">
         <div className="week-cell week-head week-label grid place-items-center font-extrabold">구분</div>
         {days.map((day) => <div key={day.toISOString()} className={`week-cell week-head grid place-items-center ${isToday(day) ? "today" : ""}`}><span className="text-sm font-extrabold">{format(day, "M.d")}</span><span className="muted text-xs">{format(day, "EEE", { locale: ko })}</span></div>)}
-        {rows.map((row) => (
-          <div key={row.id} className="contents">
-            <div className="week-cell week-label flex items-center font-bold">{row.label}</div>
-            {days.map((day) => {
-              const items = schedules.filter((schedule) => belongsToRow(schedule, row) && occursOnDay(schedule, day));
-              return <div key={`${row.id}-${day.toISOString()}`} className={`week-cell ${isToday(day) ? "today" : ""}`}>{items.slice(0, 3).map((schedule) => <Item key={schedule.id} schedule={schedule} organizationId={organizationId} rowKind={row.kind} />)}{items.length > 3 && <span className="muted px-1 text-xs font-bold">+{items.length - 3}개</span>}</div>;
-            })}
-          </div>
-        ))}
+        {rows.map((row) => <div key={row.id} className="contents"><div className="week-cell week-label flex items-center font-bold">{row.label}</div>{days.map((day) => { const items = schedules.filter((schedule) => belongsToRow(schedule, row) && occursOnDay(schedule, day)); return <div key={`${row.id}-${day.toISOString()}`} className={`week-cell ${isToday(day) ? "today" : ""}`}>{items.slice(0, 3).map((schedule) => <Item key={schedule.id} schedule={schedule} organizationId={organizationId} rowKind={row.kind} />)}{items.length > 3 && <span className="muted px-1 text-xs font-bold">+{items.length - 3}개</span>}</div>; })}</div>)}
       </div>
     </div>
   );
 }
 
-export function MonthBoard({
-  organizationId,
-  days,
-  currentMonth,
-  schedules,
-}: {
-  organizationId: string;
-  days: Date[];
-  currentMonth: number;
-  schedules: ScheduleItem[];
-}) {
+export function MonthBoard({ organizationId, days, currentMonth, schedules }: { organizationId: string; days: Date[]; currentMonth: number; schedules: ScheduleItem[] }) {
   return (
-    <div className="schedule-scroll" aria-label="월간 캘린더">
-      <div className="month-grid">
-        {["월", "화", "수", "목", "금", "토", "일"].map((label) => <div key={label} className="month-cell month-head">{label}</div>)}
-        {days.map((day) => {
-          const items = schedules.filter((schedule) => occursOnDay(schedule, day));
-          return <div key={day.toISOString()} className={`month-cell ${isToday(day) ? "today" : ""} ${day.getMonth() !== currentMonth ? "opacity-45" : ""}`}>
-            <p className="mb-2 text-sm font-extrabold">{format(day, "d")}</p>
-            {items.slice(0, 3).map((schedule) => <Item key={schedule.id} schedule={schedule} organizationId={organizationId} />)}
-            {items.length > 3 && <span className="muted text-xs font-bold">+{items.length - 3}개</span>}
-          </div>;
-        })}
-      </div>
-    </div>
+    <div className="schedule-scroll" aria-label="월간 캘린더"><div className="month-grid">
+      {["월", "화", "수", "목", "금", "토", "일"].map((label) => <div key={label} className="month-cell month-head">{label}</div>)}
+      {days.map((day) => { const items = schedules.filter((schedule) => occursOnDay(schedule, day)); return <div key={day.toISOString()} className={`month-cell ${isToday(day) ? "today" : ""} ${day.getMonth() !== currentMonth ? "opacity-45" : ""}`}><p className="mb-2 text-sm font-extrabold">{format(day, "d")}</p>{items.slice(0, 3).map((schedule) => <Item key={schedule.id} schedule={schedule} organizationId={organizationId} />)}{items.length > 3 && <span className="muted text-xs font-bold">+{items.length - 3}개</span>}</div>; })}
+    </div></div>
   );
+}
+
+export function DayBoard({ organizationId, schedules }: { organizationId: string; schedules: ScheduleItem[] }) {
+  return <div className="grid gap-3">{schedules.map((schedule) => (
+    <article className={`card p-5 ${schedule.isCompleted ? "opacity-60" : ""}`} key={schedule.id}>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2"><span className="badge badge-green">{schedule.itemType === "TASK" ? "업무" : categoryLabel[schedule.category] ?? schedule.category}</span>{schedule.departmentName && <span className="badge badge-gray">{schedule.departmentName}</span>}{schedule.scope === "PERSONAL" && <span className="badge badge-orange">개인</span>}{schedule.isImportant && <Flag className="text-[var(--accent)]" size={15} />}</div>
+          <h2 className={`mt-3 text-lg font-extrabold ${schedule.isCompleted ? "line-through" : ""}`}>{schedule.title}</h2>
+          <p className="muted mt-2 flex items-center gap-2 text-sm"><Clock3 size={15} /> {schedule.isAllDay ? "종일" : `${format(schedule.startsAt, "HH:mm")} – ${format(schedule.endsAt, "HH:mm")}`} · {schedule.targetUserName || schedule.creatorProfileName || "담당자 없음"}</p>
+          {schedule.description && <p className="mt-3 whitespace-pre-wrap text-sm leading-6">{schedule.description}</p>}
+          {schedule.memo && <div className="mt-3 rounded-xl bg-amber-50 p-3 text-sm leading-6 text-amber-900"><StickyNote className="mr-2 inline" size={15} />{schedule.memo}</div>}
+        </div>
+        <div className="flex flex-wrap gap-2 no-print">
+          {schedule.itemType === "TASK" && <form action={toggleTaskCompleteAction}><input type="hidden" name="organizationId" value={organizationId} /><input type="hidden" name="scheduleId" value={schedule.id} /><SubmitButton className="btn btn-secondary" pendingLabel="변경 중…"><CheckCircle2 size={16} /> {schedule.isCompleted ? "미완료로" : "완료"}</SubmitButton></form>}
+          <Link className="btn btn-secondary" href={`/org/${organizationId}/personal?date=${format(schedule.startsAt, "yyyy-MM-dd")}&edit=${schedule.id}`}><Pencil size={16} /> 수정</Link>
+        </div>
+      </div>
+    </article>
+  ))}</div>;
 }

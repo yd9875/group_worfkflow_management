@@ -28,17 +28,7 @@ export default async function PrintPage({
     ]),
   );
   const items: ScheduleItem[] = schedules.map((schedule) => ({
-    id: schedule.id,
-    title: schedule.title,
-    description: schedule.description,
-    startsAt: schedule.startsAt,
-    endsAt: schedule.endsAt,
-    isAllDay: schedule.isAllDay,
-    scope: schedule.scope,
-    category: schedule.category,
-    isImportant: schedule.isImportant,
-    itemType: schedule.itemType,
-    departmentId: schedule.departmentId,
+    ...schedule,
     departmentName: schedule.department?.name ?? null,
     targetUserId: schedule.targetUserId,
     targetUserName: schedule.targetUserId

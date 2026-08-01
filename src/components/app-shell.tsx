@@ -6,13 +6,13 @@ import { useEffect, useRef, useState } from "react";
 import {
   Bell,
   Building2,
+  CalendarCheck2,
   CalendarDays,
   CalendarRange,
   ClipboardList,
-  ClipboardPlus,
   House,
   MoveHorizontal,
-  Plus,
+  NotebookPen,
   Settings2,
   UserRoundCog,
   Users,
@@ -43,10 +43,14 @@ export function AppShell({
   const [showMobileScrollHint, setShowMobileScrollHint] = useState(false);
   const root = `/org/${organizationId}`;
   const links = [
-    { href: "/organizations", label: "홈", icon: House },
+    { href: `${root}/schedule/day`, label: "일일 계획", icon: CalendarCheck2 },
     { href: `${root}/schedule/week`, label: "주간 일정", icon: CalendarRange },
     { href: `${root}/schedule/month`, label: "월간 일정", icon: CalendarDays },
-    { href: `${root}/members`, label: "구성원", icon: Users },
+    { href: `${root}/personal`, label: "개인 일정관리", icon: NotebookPen },
+    { href: `${root}/members`, label: "구성원 현황", icon: Users },
+  ];
+  const quickLinks = [
+    { href: "/organizations", label: "홈", icon: House },
     { href: `${root}/notifications`, label: `알림${unreadCount ? ` ${unreadCount}` : ""}`, icon: Bell },
     { href: "/account", label: "계정", icon: UserRoundCog },
   ];
@@ -82,10 +86,18 @@ export function AppShell({
             <span className="muted block text-[.68rem] font-bold">현재 조직</span>
             <span className="block truncate text-sm font-bold">{organizationName}</span>
             <span className="muted mt-0.5 block truncate font-mono text-[.62rem] tracking-[.08em]">
-              가입코드 {joinCode}
+              입장 코드 {joinCode}
             </span>
           </span>
         </div>
+        <nav className="sidebar-quick card mb-5 grid gap-1 p-2" aria-label="사용자 메뉴">
+          {quickLinks.map(({ href, label, icon: Icon }) => (
+            <Link key={href} className={`nav-link ${active(href) ? "nav-link-active" : ""}`} href={href}>
+              <Icon size={18} />
+              <span>{label}</span>
+            </Link>
+          ))}
+        </nav>
         <nav className="grid gap-1" aria-label="주 메뉴">
           {links.map(({ href, label, icon: Icon }) => (
             <Link key={href} className={`nav-link ${active(href) ? "nav-link-active" : ""}`} href={href}>
@@ -97,17 +109,24 @@ export function AppShell({
         {(role === "OWNER" || role === "ADMIN") && (
           <div className="sidebar-admin mt-6">
             <p className="muted mb-2 px-3 text-[.68rem] font-bold tracking-[.1em]">관리</p>
-            <Link className={`nav-link ${active(`${root}/admin/requests`) ? "nav-link-active" : ""}`} href={`${root}/admin/requests`}><ClipboardList size={18} /> 가입 신청</Link>
+            <Link className={`nav-link ${active(`${root}/admin/requests`) ? "nav-link-active" : ""}`} href={`${root}/admin/requests`}><ClipboardList size={18} /> 입장 신청</Link>
+            <Link className={`nav-link ${active(`${root}/admin/members`) ? "nav-link-active" : ""}`} href={`${root}/admin/members`}><Users size={18} /> 구성원 관리</Link>
             <Link className={`nav-link ${active(`${root}/admin/departments`) ? "nav-link-active" : ""}`} href={`${root}/admin/departments`}><Building2 size={18} /> 부서 관리</Link>
-            <Link className={`nav-link ${active(`${root}/admin/members`) ? "nav-link-active" : ""}`} href={`${root}/admin/members`}><Settings2 size={18} /> 조직 관리</Link>
+            <Link className={`nav-link ${active(`${root}/admin/settings`) ? "nav-link-active" : ""}`} href={`${root}/admin/settings`}><Settings2 size={18} /> 조직 관리</Link>
           </div>
         )}
         {(role === "OWNER" || role === "ADMIN") && (
           <>
+            <Link className={`mobile-admin-link nav-link ${active(`${root}/admin/requests`) ? "nav-link-active" : ""}`} href={`${root}/admin/requests`}>
+              <ClipboardList size={18} /> 입장 신청
+            </Link>
             <Link className={`mobile-admin-link nav-link ${active(`${root}/admin/departments`) ? "nav-link-active" : ""}`} href={`${root}/admin/departments`}>
               <Building2 size={18} /> 부서 관리
             </Link>
             <Link className={`mobile-admin-link nav-link ${active(`${root}/admin/members`) ? "nav-link-active" : ""}`} href={`${root}/admin/members`}>
+              <Users size={18} /> 구성원 관리
+            </Link>
+            <Link className={`mobile-admin-link nav-link ${active(`${root}/admin/settings`) ? "nav-link-active" : ""}`} href={`${root}/admin/settings`}>
               <Settings2 size={18} /> 조직 관리
             </Link>
           </>
@@ -124,23 +143,6 @@ export function AppShell({
         )}
       </aside>
       <section className="app-main">
-        <header className="topbar no-print">
-          <div>
-            <p className="muted text-xs font-bold">조직</p>
-            <p className="font-extrabold tracking-[-.02em]">{organizationName}</p>
-            <p className="muted font-mono text-[.62rem] tracking-[.08em]">
-              가입코드 {joinCode}
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <Link className="btn btn-primary" href={`${root}/schedule/week?new=schedule`}>
-              <Plus size={17} /> <span className="hidden sm:inline">일정 추가</span>
-            </Link>
-            <Link className="btn btn-primary" href={`${root}/schedule/week?new=task`}>
-              <ClipboardPlus size={17} /> <span className="hidden sm:inline">업무 추가</span>
-            </Link>
-          </div>
-        </header>
         <main className="content">{children}</main>
       </section>
     </div>

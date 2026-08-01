@@ -1,95 +1,101 @@
 import Link from "next/link";
 import { addDays, addMonths, addWeeks, eachDayOfInterval, endOfMonth, endOfWeek, format, startOfMonth, startOfWeek } from "date-fns";
 import { ko } from "date-fns/locale";
-import { CalendarDays, ChevronLeft, ChevronRight, Printer } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, Printer, SlidersHorizontal, Sparkles } from "lucide-react";
 import { getScheduleContext, listSchedules } from "@/features/queries";
-import { MonthBoard, ScheduleItem, WeekBoard } from "@/components/schedule-board";
-import { ScheduleDialog } from "@/components/schedule-dialog";
-import { TaskDialog } from "@/components/task-dialog";
+import { DayBoard, MonthBoard, ScheduleItem, WeekBoard } from "@/components/schedule-board";
 
-type Search = { date?: string; new?: string };
+type Search = {
+  date?: string;
+  category?: string;
+  department?: string;
+  member?: string;
+};
 
-export async function SchedulePage({
-  organizationId,
-  view,
-  search,
-}: {
-  organizationId: string;
-  view: "week" | "month";
-  search: Search;
-}) {
+const viewCopy = {
+  day: { eyebrow: "Daily plan", title: "일일 계획" },
+  week: { eyebrow: "Weekly schedule", title: "주간 일정표" },
+  month: { eyebrow: "Monthly calendar", title: "월간 일정표" },
+} as const;
+
+export async function SchedulePage({ organizationId, view, search }: { organizationId: string; view: "day" | "week" | "month"; search: Search }) {
   const selectedDate = search.date && /^\d{4}-\d{2}-\d{2}$/.test(search.date) ? new Date(`${search.date}T12:00:00`) : new Date();
   const context = await getScheduleContext(organizationId);
   const schedules = await listSchedules({
     organizationId,
     date: selectedDate,
     view,
+    category: search.category,
+    departmentId: search.department,
+    memberId: search.member,
   });
   const weekStart = startOfWeek(selectedDate, { weekStartsOn: 1 });
   const weekDays = Array.from({ length: 7 }, (_, index) => addDays(weekStart, index));
   const monthStart = startOfWeek(startOfMonth(selectedDate), { weekStartsOn: 1 });
   const monthEnd = endOfWeek(endOfMonth(selectedDate), { weekStartsOn: 1 });
   const monthDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
-  const previous = view === "week" ? addWeeks(selectedDate, -1) : addMonths(selectedDate, -1);
-  const next = view === "week" ? addWeeks(selectedDate, 1) : addMonths(selectedDate, 1);
-  const profileNames = new Map(
-    context.members.map((member) => [
-      member.userId,
-      member.profileName?.trim() || member.user.name,
-    ]),
-  );
+  const previous = view === "day" ? addDays(selectedDate, -1) : view === "week" ? addWeeks(selectedDate, -1) : addMonths(selectedDate, -1);
+  const next = view === "day" ? addDays(selectedDate, 1) : view === "week" ? addWeeks(selectedDate, 1) : addMonths(selectedDate, 1);
+  const profileNames = new Map(context.members.map((member) => [member.userId, member.profileName?.trim() || member.user.name]));
   const serialized: ScheduleItem[] = schedules.map((schedule) => ({
-    id: schedule.id,
-    title: schedule.title,
-    description: schedule.description,
-    startsAt: schedule.startsAt,
-    endsAt: schedule.endsAt,
-    isAllDay: schedule.isAllDay,
-    scope: schedule.scope,
-    category: schedule.category,
-    isImportant: schedule.isImportant,
-    itemType: schedule.itemType,
-    departmentId: schedule.departmentId,
+    ...schedule,
     departmentName: schedule.department?.name ?? null,
-    targetUserId: schedule.targetUserId,
-    targetUserName: schedule.targetUserId
-      ? profileNames.get(schedule.targetUserId) ?? schedule.targetUser?.name ?? null
-      : null,
-    creatorProfileName: schedule.createdByUserId
-      ? profileNames.get(schedule.createdByUserId) ?? schedule.createdBy?.name ?? null
-      : null,
+    targetUserName: schedule.targetUserId ? profileNames.get(schedule.targetUserId) ?? schedule.targetUser?.name ?? null : null,
+    creatorProfileName: schedule.createdByUserId ? profileNames.get(schedule.createdByUserId) ?? schedule.createdBy?.name ?? null : null,
   }));
-  const querySuffix = (date: Date) => {
-    const params = new URLSearchParams();
-    params.set("date", format(date, "yyyy-MM-dd"));
+  const dateValue = format(selectedDate, "yyyy-MM-dd");
+  const querySuffix = (date: Date, keepFilters = true) => {
+    const params = new URLSearchParams({ date: format(date, "yyyy-MM-dd") });
+    if (keepFilters && search.category) params.set("category", search.category);
+    if (keepFilters && search.department) params.set("department", search.department);
+    if (keepFilters && search.member) params.set("member", search.member);
     return params.toString();
   };
+  const periodLabel = view === "day"
+    ? format(selectedDate, "yyyy년 M월 d일 EEEE", { locale: ko })
+    : view === "week"
+      ? `${format(weekStart, "yyyy년 M월 d일", { locale: ko })} – ${format(addDays(weekStart, 6), "M월 d일", { locale: ko })}`
+      : format(selectedDate, "yyyy년 M월", { locale: ko });
 
   return (
     <div className="grid gap-5">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
-          <p className="eyebrow">{view === "week" ? "Weekly schedule" : "Monthly calendar"}</p>
-          <h1 className="page-title mt-1">{view === "week" ? "주간 일정표" : "월간 캘린더"}</h1>
+          <p className="eyebrow">{viewCopy[view].eyebrow}</p>
+          <div className="mt-1 flex flex-wrap items-center gap-3">
+            <h1 className="page-title">{viewCopy[view].title}</h1>
+            <Link className="btn btn-secondary no-print min-h-9 px-3 py-1.5 text-sm" href={`/org/${organizationId}/schedule/${view}`}>오늘로</Link>
+          </div>
           <div className="mt-2 flex items-center gap-1">
             <Link className="period-arrow no-print" href={`/org/${organizationId}/schedule/${view}?${querySuffix(previous)}`} aria-label="이전 기간"><ChevronLeft size={18} /></Link>
-            <p className="muted min-w-0 px-1 font-bold">{view === "week" ? `${format(weekStart, "yyyy년 M월 d일", { locale: ko })} – ${format(addDays(weekStart, 6), "M월 d일", { locale: ko })}` : format(selectedDate, "yyyy년 M월", { locale: ko })}</p>
+            <p className="muted min-w-0 px-1 font-bold">{periodLabel}</p>
             <Link className="period-arrow no-print" href={`/org/${organizationId}/schedule/${view}?${querySuffix(next)}`} aria-label="다음 기간"><ChevronRight size={18} /></Link>
           </div>
         </div>
         <div className="no-print flex flex-wrap gap-2">
-          <Link className="btn btn-secondary" href={`/org/${organizationId}/schedule/${view}`}>오늘로</Link>
-          <Link className="btn btn-secondary" href={`/org/${organizationId}/print?${querySuffix(selectedDate)}`}><Printer size={17} /> 인쇄/PDF</Link>
-          <ScheduleDialog key={`schedule-${search.new ?? "closed"}`} organizationId={organizationId} departments={context.departments.filter((department) => !department.isSystem).map(({ id, name }) => ({ id, name }))} defaultDate={format(selectedDate, "yyyy-MM-dd")} openInitially={search.new === "schedule" || search.new === "1"} />
-          <TaskDialog key={`task-${search.new ?? "closed"}`} organizationId={organizationId} departments={context.departments.filter((department) => !department.isSystem).map(({ id, name }) => ({ id, name }))} defaultDate={format(selectedDate, "yyyy-MM-dd")} openInitially={search.new === "task"} />
+          {(context.membership.role === "OWNER" || context.membership.role === "ADMIN") && <Link className="btn btn-primary" href={`/org/${organizationId}/report?view=${view}&date=${dateValue}`}><Sparkles size={17} /> AI 보고서</Link>}
+          {view !== "day" && <Link className="btn btn-secondary" href={`/org/${organizationId}/print?${querySuffix(selectedDate)}`}><Printer size={17} /> 인쇄/PDF</Link>}
         </div>
       </header>
-      {view === "week" ? (
+
+      <form method="get" action={`/org/${organizationId}/schedule/${view}`} className="card no-print flex flex-wrap items-end gap-3 p-4">
+        <input type="hidden" name="date" value={dateValue} />
+        <SlidersHorizontal className="mb-2 text-[var(--brand)]" size={19} />
+        <label className="label min-w-36 flex-1">일정 유형<select className="field" name="category" defaultValue={search.category ?? ""}><option value="">전체 유형</option><option value="LEAVE">휴가</option><option value="EXTERNAL">외부 일정</option><option value="MEETING">회의</option><option value="GENERAL">일반</option><option value="OTHER">기타</option></select></label>
+        <label className="label min-w-36 flex-1">부서<select className="field" name="department" defaultValue={search.department ?? ""}><option value="">전체 부서</option>{context.departments.filter((department) => !department.isSystem).map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}</select></label>
+        <label className="label min-w-36 flex-1">구성원<select className="field" name="member" defaultValue={search.member ?? ""}><option value="">전체 구성원</option>{context.members.map((member) => <option key={member.userId} value={member.userId}>{member.profileName?.trim() || member.user.name}</option>)}</select></label>
+        <button className="btn btn-secondary" type="submit">필터 적용</button>
+        <Link className="btn btn-quiet" href={`/org/${organizationId}/schedule/${view}?date=${dateValue}`}>초기화</Link>
+      </form>
+
+      {view === "day" ? (
+        <DayBoard organizationId={organizationId} schedules={serialized} />
+      ) : view === "week" ? (
         <WeekBoard organizationId={organizationId} days={weekDays} departments={context.departments.map(({ id, name, isSystem }) => ({ id, name, isSystem }))} schedules={serialized} />
       ) : (
         <MonthBoard organizationId={organizationId} days={monthDays} currentMonth={selectedDate.getMonth()} schedules={serialized} />
       )}
-      {!schedules.length && <div className="card p-8 text-center"><CalendarDays className="mx-auto text-[var(--brand)]" /><p className="mt-3 font-bold">표시할 일정이 없습니다</p><p className="muted mt-1 text-sm">새 일정이나 업무를 등록해 보세요.</p></div>}
+      {!schedules.length && <div className="card p-8 text-center"><CalendarDays className="mx-auto text-[var(--brand)]" /><p className="mt-3 font-bold">표시할 일정이 없습니다</p><p className="muted mt-1 text-sm">개인 일정관리에서 일정이나 업무를 등록하거나 필터를 초기화해 보세요.</p><Link className="btn btn-primary mt-4" href={`/org/${organizationId}/personal?date=${dateValue}`}>개인 일정관리 열기</Link></div>}
     </div>
   );
 }

@@ -2,7 +2,7 @@ export const PRIVACY_POLICY_VERSION = "2026-07-30";
 
 export const SIGNUP_PRIVACY_NOTICE = {
   purpose:
-    "회원 식별·인증, 조직 가입 및 승인, 일정·알림 서비스 제공, 부정 이용 방지와 서비스 보안",
+    "회원 식별·인증, 조직 입장 및 승인, 일정·알림 서비스 제공, 부정 이용 방지와 서비스 보안",
   requiredItems:
     "이름, 이메일, 비밀번호(일방향 암호화 저장), 동의 일시와 정책 버전",
   automaticItems: "접속 IP, 브라우저·기기 정보, 서비스 이용 기록",

@@ -107,7 +107,7 @@ export default async function AccountPage() {
           <div>
             <h2 className="font-extrabold">탈퇴 시 파기되는 정보</h2>
             <p className="muted mt-1 text-sm leading-6">
-              계정·로그인 정보, 세션, 조직 멤버십, 가입 신청, 알림, 사용자
+              계정·로그인 정보, 세션, 조직 멤버십, 입장 신청, 알림, 사용자
               환경설정과 개인 일정이 삭제됩니다. 공동 일정과 감사 기록은 사용자
               식별 연결값을 제거한 뒤 조직 기록으로 남습니다.
             </p>

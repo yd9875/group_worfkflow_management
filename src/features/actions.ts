@@ -97,13 +97,13 @@ export async function requestJoinAction(formData: FormData) {
   const user = await requireUser();
   const code = normalizeJoinCode(text(formData, "code"));
   if (code.length < 8 || code.length > 12) {
-    throw new AppError("VALIDATION_ERROR", "가입 코드를 확인해 주세요.");
+    throw new AppError("VALIDATION_ERROR", "입장 코드를 확인해 주세요.");
   }
   const organization = await prisma.organization.findUnique({
     where: { joinCodeHash: hashJoinCode(code) },
   });
   if (!organization) {
-    throw new AppError("NOT_FOUND", "유효한 가입 코드를 찾지 못했습니다.", 404);
+    throw new AppError("NOT_FOUND", "유효한 입장 코드를 찾지 못했습니다.", 404);
   }
 
   const existingMember = await prisma.membership.findUnique({
@@ -135,8 +135,8 @@ export async function requestJoinAction(formData: FormData) {
         userId,
         organizationId: organization.id,
         type: "JOIN_REQUESTED",
-        title: "새 가입 신청",
-        body: `${user.name} 님이 조직 가입을 신청했습니다.`,
+        title: "새 입장 신청",
+        body: `${user.name} 님이 조직 입장을 신청했습니다.`,
         resourceType: "JOIN_REQUEST",
         resourceId: request.id,
       })),
@@ -252,6 +252,7 @@ export async function createScheduleAction(formData: FormData) {
   });
   revalidatePath(`/org/${organizationId}/schedule/week`);
   revalidatePath(`/org/${organizationId}/schedule/month`);
+  revalidatePath(`/org/${organizationId}/schedule/day`);
 }
 
 export async function createTaskAction(formData: FormData) {
@@ -328,6 +329,157 @@ export async function createTaskAction(formData: FormData) {
   });
   revalidatePath(`/org/${organizationId}/schedule/week`);
   revalidatePath(`/org/${organizationId}/schedule/month`);
+  revalidatePath(`/org/${organizationId}/schedule/day`);
+}
+
+const personalEntrySchema = z.object({
+  itemType: z.enum(["SCHEDULE", "TASK"]),
+  title: z.string().trim().min(1).max(100),
+  description: z.string().trim().max(2000).optional(),
+  memo: z.string().trim().max(4000).optional(),
+  startsAt: z.coerce.date(),
+  endsAt: z.coerce.date(),
+  category: z.enum([
+    "GENERAL",
+    "MEETING",
+    "TRAINING",
+    "LEAVE",
+    "BUSINESS_TRIP",
+    "OUTING",
+    "OTHER",
+  ]),
+  isAllDay: z.boolean(),
+  isImportant: z.boolean(),
+  showInWeek: z.boolean(),
+  showInMonth: z.boolean(),
+  isCompleted: z.boolean(),
+}).refine((value) => value.endsAt > value.startsAt, {
+  path: ["endsAt"],
+  message: "종료 시각은 시작 시각보다 늦어야 합니다.",
+});
+
+function personalEntryInput(formData: FormData) {
+  return personalEntrySchema.parse({
+    itemType: text(formData, "itemType"),
+    title: text(formData, "title"),
+    description: text(formData, "description") || undefined,
+    memo: text(formData, "memo") || undefined,
+    startsAt: text(formData, "startsAt"),
+    endsAt: text(formData, "endsAt"),
+    category: text(formData, "category"),
+    isAllDay: formData.get("isAllDay") === "on",
+    isImportant: formData.get("isImportant") === "on",
+    showInWeek: formData.get("showInWeek") === "on",
+    showInMonth: formData.get("showInMonth") === "on",
+    isCompleted: formData.get("isCompleted") === "on",
+  });
+}
+
+function revalidateScheduleViews(organizationId: string) {
+  revalidatePath(`/org/${organizationId}/schedule/day`);
+  revalidatePath(`/org/${organizationId}/schedule/week`);
+  revalidatePath(`/org/${organizationId}/schedule/month`);
+  revalidatePath(`/org/${organizationId}/schedule/day`);
+  revalidatePath(`/org/${organizationId}/personal`);
+  revalidatePath(`/org/${organizationId}/personal`);
+}
+
+export async function createPersonalEntryAction(formData: FormData) {
+  const organizationId = text(formData, "organizationId");
+  const membership = await requireMembership(organizationId);
+  const input = personalEntryInput(formData);
+  const entry = await prisma.schedule.create({
+    data: {
+      organizationId,
+      createdByUserId: membership.userId,
+      updatedByUserId: membership.userId,
+      targetUserId: membership.userId,
+      departmentId: null,
+      scope: "PERSONAL",
+      ...input,
+      description: input.description || null,
+      memo: input.memo || null,
+      category: input.itemType === "TASK" ? "GENERAL" : input.category,
+    },
+  });
+  await prisma.auditLog.create({
+    data: {
+      organizationId,
+      actorUserId: membership.userId,
+      action: "PERSONAL_ENTRY_CREATED",
+      entityType: "SCHEDULE",
+      entityId: entry.id,
+      metadataJson: { itemType: entry.itemType },
+    },
+  });
+  revalidateScheduleViews(organizationId);
+  redirect(`/org/${organizationId}/personal?date=${text(formData, "returnDate")}`);
+}
+
+export async function updateScheduleAction(formData: FormData) {
+  const organizationId = text(formData, "organizationId");
+  const scheduleId = z.string().uuid().parse(text(formData, "scheduleId"));
+  const membership = await requireMembership(organizationId);
+  const schedule = await prisma.schedule.findFirst({
+    where: { id: scheduleId, organizationId, deletedAt: null },
+  });
+  if (!schedule) throw new AppError("NOT_FOUND", "일정 또는 업무를 찾지 못했습니다.", 404);
+  if (!canEditSchedule(membership, schedule)) {
+    throw new AppError("FORBIDDEN", "이 항목을 수정할 권한이 없습니다.", 403);
+  }
+  const input = personalEntryInput(formData);
+  await prisma.$transaction([
+    prisma.schedule.update({
+      where: { id: schedule.id },
+      data: {
+        title: input.title,
+        description: input.description || null,
+        memo: input.memo || null,
+        startsAt: input.startsAt,
+        endsAt: input.endsAt,
+        isAllDay: input.isAllDay,
+        isImportant: input.isImportant,
+        showInWeek: input.showInWeek,
+        showInMonth: input.showInMonth,
+        isCompleted: input.isCompleted,
+        itemType: schedule.scope === "PERSONAL" ? input.itemType : schedule.itemType,
+        category:
+          schedule.scope === "PERSONAL" && input.itemType === "TASK"
+            ? "GENERAL"
+            : input.category,
+        updatedByUserId: membership.userId,
+      },
+    }),
+    prisma.auditLog.create({
+      data: {
+        organizationId,
+        actorUserId: membership.userId,
+        action: "SCHEDULE_UPDATED",
+        entityType: "SCHEDULE",
+        entityId: schedule.id,
+        metadataJson: { title: input.title },
+      },
+    }),
+  ]);
+  revalidateScheduleViews(organizationId);
+  redirect(`/org/${organizationId}/personal?date=${text(formData, "returnDate")}`);
+}
+
+export async function toggleTaskCompleteAction(formData: FormData) {
+  const organizationId = text(formData, "organizationId");
+  const scheduleId = z.string().uuid().parse(text(formData, "scheduleId"));
+  const membership = await requireMembership(organizationId);
+  const schedule = await prisma.schedule.findFirst({
+    where: { id: scheduleId, organizationId, deletedAt: null },
+  });
+  if (!schedule || !canEditSchedule(membership, schedule)) {
+    throw new AppError("FORBIDDEN", "이 업무의 완료 상태를 변경할 수 없습니다.", 403);
+  }
+  await prisma.schedule.update({
+    where: { id: schedule.id },
+    data: { isCompleted: !schedule.isCompleted, updatedByUserId: membership.userId },
+  });
+  revalidateScheduleViews(organizationId);
 }
 
 export async function deleteScheduleAction(formData: FormData) {
@@ -544,7 +696,7 @@ export async function approveJoinRequestAction(formData: FormData) {
       where: { id: departmentId, organizationId, isActive: true },
     });
     if (!request || !department) {
-      throw new AppError("NOT_FOUND", "가입 신청 또는 부서를 찾지 못했습니다.", 404);
+      throw new AppError("NOT_FOUND", "입장 신청 또는 부서를 찾지 못했습니다.", 404);
     }
     await tx.membership.upsert({
       where: {
@@ -572,7 +724,7 @@ export async function approveJoinRequestAction(formData: FormData) {
         userId: request.userId,
         organizationId,
         type: "JOIN_APPROVED",
-        title: "가입이 승인되었습니다",
+        title: "입장이 승인되었습니다",
         body: `${actor.organization.name}에 참여할 수 있습니다.`,
         resourceType: "ORGANIZATION",
         resourceId: organizationId,
@@ -600,7 +752,7 @@ export async function rejectJoinRequestAction(formData: FormData) {
     const request = await tx.joinRequest.findFirst({
       where: { id: requestId, organizationId, status: "PENDING" },
     });
-    if (!request) throw new AppError("NOT_FOUND", "가입 신청을 찾지 못했습니다.", 404);
+    if (!request) throw new AppError("NOT_FOUND", "입장 신청을 찾지 못했습니다.", 404);
     await tx.joinRequest.update({
       where: { id: request.id },
       data: {
@@ -615,8 +767,8 @@ export async function rejectJoinRequestAction(formData: FormData) {
         userId: request.userId,
         organizationId,
         type: "JOIN_REJECTED",
-        title: "가입 신청 결과",
-        body: "가입 신청이 승인되지 않았습니다.",
+        title: "입장 신청 결과",
+        body: "입장 신청이 승인되지 않았습니다.",
       },
     });
     await tx.auditLog.create({
@@ -855,6 +1007,29 @@ export async function rotateJoinCodeAction(formData: FormData) {
         entityType: "ORGANIZATION",
         entityId: organizationId,
         metadataJson: {},
+      },
+    }),
+  ]);
+  revalidatePath(`/org/${organizationId}/admin/settings`);
+}
+
+export async function updateReportReferenceAction(formData: FormData) {
+  const organizationId = text(formData, "organizationId");
+  const actor = await requireMembership(organizationId, ["OWNER", "ADMIN"]);
+  const reportReference = z.string().trim().max(12000).parse(text(formData, "reportReference"));
+  await prisma.$transaction([
+    prisma.organization.update({
+      where: { id: organizationId },
+      data: { reportReference: reportReference || null },
+    }),
+    prisma.auditLog.create({
+      data: {
+        organizationId,
+        actorUserId: actor.userId,
+        action: "REPORT_REFERENCE_UPDATED",
+        entityType: "ORGANIZATION",
+        entityId: organizationId,
+        metadataJson: { hasReference: Boolean(reportReference) },
       },
     }),
   ]);

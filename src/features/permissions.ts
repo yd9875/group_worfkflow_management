@@ -35,7 +35,9 @@ export function canViewSchedule(
   ) {
     return false;
   }
-  if (isManager(member.role)) return true;
+  if (isManager(member.role)) {
+    return schedule.scope !== "PERSONAL" || schedule.targetUserId === member.userId;
+  }
   if (schedule.scope === "ORGANIZATION") return true;
   if (schedule.scope === "DEPARTMENT") {
     return schedule.departmentId === member.departmentId;

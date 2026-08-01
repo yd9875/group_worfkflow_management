@@ -38,6 +38,19 @@ describe("일정 권한", () => {
     expect(canEditSchedule(member, { ...baseSchedule, category: "OUTING" })).toBe(true);
     expect(canEditSchedule(member, { ...baseSchedule, category: "BUSINESS_TRIP" })).toBe(true);
   });
+  it("관리자도 다른 구성원의 개인 일정은 볼 수 없다", () => {
+    const manager = { ...member, role: "ADMIN" as const };
+    expect(canViewSchedule(manager, {
+      ...baseSchedule,
+      scope: "PERSONAL",
+      targetUserId: "u2",
+    })).toBe(false);
+    expect(canViewSchedule(manager, {
+      ...baseSchedule,
+      scope: "PERSONAL",
+      targetUserId: "u1",
+    })).toBe(true);
+  });
   it("소유자만 구성원의 역할과 소유권을 변경한다", () => {
     expect(roleCanManageRole("ADMIN", "MEMBER", "ADMIN")).toBe(false);
     expect(roleCanManageRole("OWNER", "MEMBER", "ADMIN")).toBe(true);

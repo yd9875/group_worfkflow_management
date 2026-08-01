@@ -131,6 +131,7 @@ model Organization {
   joinCodeCiphertext String
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
+  reportReference    String?
   memberships        Membership[]
   departments        Department[]
   joinRequests       JoinRequest[]
@@ -216,6 +217,10 @@ model Schedule {
   scope           ScheduleScope
   category        ScheduleCategory @default(GENERAL)
   isImportant     Boolean          @default(false)
+  showInWeek      Boolean          @default(true)
+  showInMonth     Boolean          @default(true)
+  isCompleted     Boolean          @default(false)
+  memo            String?
   departmentId    String?
   targetUserId    String?
   createdAt       DateTime         @default(now())

@@ -1,0 +1,8 @@
+ALTER TABLE "organizations"
+ADD COLUMN "reportReference" TEXT;
+
+ALTER TABLE "schedules"
+ADD COLUMN "showInWeek" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN "showInMonth" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN "isCompleted" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN "memo" TEXT;

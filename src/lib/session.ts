@@ -36,6 +36,7 @@ const findMembership = cache(async (userId: string, organizationId: string) =>
           description: true,
           timezone: true,
           joinCodeCiphertext: true,
+          reportReference: true,
         },
       },
       department: {
