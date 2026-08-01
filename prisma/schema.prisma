@@ -51,26 +51,26 @@ enum ScheduleItemType {
 }
 
 model User {
-  id                    String             @id @default(uuid())
-  name                  String
-  email                 String             @unique
-  emailVerified         Boolean            @default(false)
-  image                 String?
-  consentedAt           DateTime?
-  consentVersion        String?
-  createdAt             DateTime           @default(now())
-  updatedAt             DateTime           @updatedAt
-  sessions              Session[]
-  accounts              Account[]
-  memberships           Membership[]
-  joinRequests          JoinRequest[]
-  createdSchedules      Schedule[]         @relation("ScheduleCreator")
-  updatedSchedules      Schedule[]         @relation("ScheduleUpdater")
-  targetedSchedules     Schedule[]         @relation("ScheduleTarget")
-  notifications         Notification[]
-  auditLogs             AuditLog[]         @relation("AuditActor")
-  preference            UserPreference?
-  reviewedJoinRequests  JoinRequest[]      @relation("JoinRequestReviewer")
+  id                   String          @id @default(uuid())
+  name                 String
+  email                String          @unique
+  emailVerified        Boolean         @default(false)
+  image                String?
+  consentedAt          DateTime?
+  consentVersion       String?
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+  sessions             Session[]
+  accounts             Account[]
+  memberships          Membership[]
+  joinRequests         JoinRequest[]
+  createdSchedules     Schedule[]      @relation("ScheduleCreator")
+  updatedSchedules     Schedule[]      @relation("ScheduleUpdater")
+  targetedSchedules    Schedule[]      @relation("ScheduleTarget")
+  notifications        Notification[]
+  auditLogs            AuditLog[]      @relation("AuditActor")
+  preference           UserPreference?
+  reviewedJoinRequests JoinRequest[]   @relation("JoinRequestReviewer")
 
   @@map("users")
 }
@@ -123,24 +123,40 @@ model Verification {
 }
 
 model Organization {
-  id                 String             @id @default(uuid())
-  name               String
-  description        String?
-  timezone           String             @default("Asia/Seoul")
-  joinCodeHash       String             @unique
-  joinCodeCiphertext String
-  createdAt          DateTime           @default(now())
-  updatedAt          DateTime           @updatedAt
-  reportReference    String?
-  memberships        Membership[]
-  departments        Department[]
-  joinRequests       JoinRequest[]
-  schedules          Schedule[]
-  notifications      Notification[]
-  auditLogs          AuditLog[]
-  preferences        UserPreference[]
+  id                   String                @id @default(uuid())
+  name                 String
+  description          String?
+  timezone             String                @default("Asia/Seoul")
+  joinCodeHash         String                @unique
+  joinCodeCiphertext   String
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  reportReference      String?
+  memberships          Membership[]
+  departments          Department[]
+  joinRequests         JoinRequest[]
+  schedules            Schedule[]
+  notifications        Notification[]
+  auditLogs            AuditLog[]
+  preferences          UserPreference[]
+  reportReferenceFiles ReportReferenceFile[]
 
   @@map("organizations")
+}
+
+model ReportReferenceFile {
+  id             String       @id @default(uuid())
+  organizationId String
+  fileName       String
+  mimeType       String
+  size           Int
+  objectKey      String       @unique
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+  @@map("report_reference_files")
 }
 
 model Department {
@@ -184,19 +200,19 @@ model Membership {
 }
 
 model JoinRequest {
-  id             String            @id @default(uuid())
-  organizationId String
-  userId         String
-  status         JoinRequestStatus @default(PENDING)
-  requestedAt    DateTime          @default(now())
-  reviewedAt     DateTime?
-  reviewedById   String?
-  departmentId   String?
+  id              String            @id @default(uuid())
+  organizationId  String
+  userId          String
+  status          JoinRequestStatus @default(PENDING)
+  requestedAt     DateTime          @default(now())
+  reviewedAt      DateTime?
+  reviewedById    String?
+  departmentId    String?
   rejectionReason String?
-  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  user           User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  reviewedBy     User?             @relation("JoinRequestReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
-  department     Department?       @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  organization    Organization      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reviewedBy      User?             @relation("JoinRequestReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  department      Department?       @relation(fields: [departmentId], references: [id], onDelete: SetNull)
 
   @@index([organizationId, status, requestedAt])
   @@index([userId, status])
@@ -274,12 +290,12 @@ model AuditLog {
 }
 
 model UserPreference {
-  userId               String       @id
-  lastOrganizationId   String?
-  defaultScheduleView  ScheduleView @default(WEEK)
-  updatedAt            DateTime     @updatedAt
-  user                 User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  lastOrganization     Organization? @relation(fields: [lastOrganizationId], references: [id], onDelete: SetNull)
+  userId              String        @id
+  lastOrganizationId  String?
+  defaultScheduleView ScheduleView  @default(WEEK)
+  updatedAt           DateTime      @updatedAt
+  user                User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastOrganization    Organization? @relation(fields: [lastOrganizationId], references: [id], onDelete: SetNull)
 
   @@map("user_preferences")
 }

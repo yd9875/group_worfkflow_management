@@ -102,7 +102,6 @@ export function WeekBoard({ organizationId, days, departments, schedules }: { or
     ...departments.filter((department) => !department.isSystem).map((department) => ({ id: `department-${department.id}`, label: department.name, kind: "department" as const, departmentId: department.id })),
     { id: "external", label: "외부 일정", kind: "external" },
     { id: "leave", label: "휴가", kind: "leave" },
-    { id: "personal", label: "개인 일정", kind: "personal" },
   ];
   return (
     <div className="schedule-scroll" aria-label="주간 일정표">
@@ -124,22 +123,56 @@ export function MonthBoard({ organizationId, days, currentMonth, schedules }: { 
   );
 }
 
-export function DayBoard({ organizationId, schedules }: { organizationId: string; schedules: ScheduleItem[] }) {
-  return <div className="grid gap-3">{schedules.map((schedule) => (
-    <article className={`card p-5 ${schedule.isCompleted ? "opacity-60" : ""}`} key={schedule.id}>
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2"><span className="badge badge-green">{schedule.itemType === "TASK" ? "업무" : categoryLabel[schedule.category] ?? schedule.category}</span>{schedule.departmentName && <span className="badge badge-gray">{schedule.departmentName}</span>}{schedule.scope === "PERSONAL" && <span className="badge badge-orange">개인</span>}{schedule.isImportant && <Flag className="text-[var(--accent)]" size={15} />}</div>
-          <h2 className={`mt-3 text-lg font-extrabold ${schedule.isCompleted ? "line-through" : ""}`}>{schedule.title}</h2>
-          <p className="muted mt-2 flex items-center gap-2 text-sm"><Clock3 size={15} /> {schedule.isAllDay ? "종일" : `${format(schedule.startsAt, "HH:mm")} – ${format(schedule.endsAt, "HH:mm")}`} · {schedule.targetUserName || schedule.creatorProfileName || "담당자 없음"}</p>
-          {schedule.description && <p className="mt-3 whitespace-pre-wrap text-sm leading-6">{schedule.description}</p>}
-          {schedule.memo && <div className="mt-3 rounded-xl bg-amber-50 p-3 text-sm leading-6 text-amber-900"><StickyNote className="mr-2 inline" size={15} />{schedule.memo}</div>}
-        </div>
-        <div className="flex flex-wrap gap-2 no-print">
-          {schedule.itemType === "TASK" && <form action={toggleTaskCompleteAction}><input type="hidden" name="organizationId" value={organizationId} /><input type="hidden" name="scheduleId" value={schedule.id} /><SubmitButton className="btn btn-secondary" pendingLabel="변경 중…"><CheckCircle2 size={16} /> {schedule.isCompleted ? "미완료로" : "완료"}</SubmitButton></form>}
-          <Link className="btn btn-secondary" href={`/org/${organizationId}/personal?date=${format(schedule.startsAt, "yyyy-MM-dd")}&edit=${schedule.id}`}><Pencil size={16} /> 수정</Link>
-        </div>
+export function DayBoard({ organizationId, day, departments, schedules }: {
+  organizationId: string;
+  day: Date;
+  departments: Array<{ id: string; name: string; isSystem: boolean }>;
+  schedules: ScheduleItem[];
+}) {
+  const rows: Row[] = [
+    { id: "common", label: "공통사항", kind: "common" },
+    ...departments.filter((department) => !department.isSystem).map((department) => ({ id: `department-${department.id}`, label: department.name, kind: "department" as const, departmentId: department.id })),
+    { id: "external", label: "외부 일정", kind: "external" },
+    { id: "leave", label: "휴가", kind: "leave" },
+    { id: "personal", label: "개인 일정", kind: "personal" },
+  ];
+
+  return (
+    <div className="schedule-scroll" aria-label="일일 계획표">
+      <div className="day-grid">
+        <div className="day-cell day-head day-label grid place-items-center font-extrabold">구분</div>
+        <div className={`day-cell day-head flex items-center justify-center gap-3 ${isToday(day) ? "today" : ""}`}><span className="text-lg font-extrabold">{format(day, "M.d")}</span><span className="muted text-sm font-bold">{format(day, "EEEE", { locale: ko })}</span></div>
+        {rows.map((row) => {
+          const items = schedules.filter((schedule) => belongsToRow(schedule, row) && occursOnDay(schedule, day));
+          return (
+            <div className="contents" key={row.id}>
+              <div className="day-cell day-label flex items-start pt-5 font-bold">{row.label}</div>
+              <div className={`day-cell grid gap-3 ${isToday(day) ? "today" : ""}`}>
+                {items.map((schedule) => (
+                  <article className={`rounded-xl border border-[var(--line)] bg-white p-4 shadow-sm ${schedule.isCompleted ? "opacity-60" : ""}`} key={schedule.id}>
+                    <div className="flex flex-wrap items-start justify-between gap-4">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2"><span className="badge badge-green">{schedule.itemType === "TASK" ? "업무" : categoryLabel[schedule.category] ?? schedule.category}</span>{schedule.departmentName && <span className="badge badge-gray">{schedule.departmentName}</span>}{schedule.scope === "PERSONAL" && <span className="badge badge-orange">개인</span>}{schedule.isImportant && <span className="badge badge-orange"><Flag size={12} /> 중요</span>}{schedule.isCompleted && <span className="badge badge-green"><CheckCircle2 size={12} /> 완료</span>}</div>
+                        <h2 className={`mt-3 text-lg font-extrabold ${schedule.isCompleted ? "line-through" : ""}`}>{schedule.title}</h2>
+                        <p className="muted mt-2 flex flex-wrap items-center gap-2 text-sm"><Clock3 size={15} /> {schedule.isAllDay ? "종일" : `${format(schedule.startsAt, "HH:mm")} – ${format(schedule.endsAt, "HH:mm")}`}<span>·</span><span>{schedule.targetUserName || schedule.creatorProfileName || "담당자 없음"}</span></p>
+                        {schedule.description && <p className="mt-3 whitespace-pre-wrap text-sm leading-6">{schedule.description}</p>}
+                        {schedule.memo && <div className="mt-3 rounded-xl bg-amber-50 p-3 text-sm leading-6 text-amber-900"><StickyNote className="mr-2 inline" size={15} />{schedule.memo}</div>}
+                        {schedule.scope === "PERSONAL" && <p className="muted mt-3 text-xs">주간 표시 {schedule.showInWeek ? "켜짐" : "꺼짐"} · 월간 표시 {schedule.showInMonth ? "켜짐" : "꺼짐"}</p>}
+                      </div>
+                      <div className="flex flex-wrap gap-2 no-print">
+                        {schedule.itemType === "TASK" && <form action={toggleTaskCompleteAction}><input type="hidden" name="organizationId" value={organizationId} /><input type="hidden" name="scheduleId" value={schedule.id} /><SubmitButton className="btn btn-secondary" pendingLabel="변경 중…"><CheckCircle2 size={16} /> {schedule.isCompleted ? "미완료로" : "완료"}</SubmitButton></form>}
+                        <Link className="btn btn-secondary" href={`/org/${organizationId}/personal?date=${format(schedule.startsAt, "yyyy-MM-dd")}&edit=${schedule.id}`}><Pencil size={16} /> 수정</Link>
+                        <form action={deleteScheduleAction}><input type="hidden" name="organizationId" value={organizationId} /><input type="hidden" name="scheduleId" value={schedule.id} /><SubmitButton className="btn btn-danger" pendingLabel="삭제 중…"><Trash2 size={16} /> 삭제</SubmitButton></form>
+                      </div>
+                    </div>
+                  </article>
+                ))}
+                {!items.length && <p className="muted py-5 text-center text-sm">등록된 항목이 없습니다.</p>}
+              </div>
+            </div>
+          );
+        })}
       </div>
-    </article>
-  ))}</div>;
+    </div>
+  );
 }

@@ -3,15 +3,17 @@ import {
   createDepartmentAction,
   deleteDepartmentAction,
   deleteOrganizationAction,
+  deleteReportReferenceFileAction,
   getJoinCode,
   rejectJoinRequestAction,
   rotateJoinCodeAction,
   updateDepartmentAction,
   updateMemberAction,
   updateReportReferenceAction,
+  uploadReportReferenceFileAction,
 } from "@/features/actions";
 import { getAdminData } from "@/features/queries";
-import { Building2, ClipboardCheck, FileText, KeyRound } from "lucide-react";
+import { Building2, ClipboardCheck, FileText, FileUp, KeyRound, Paperclip, Trash2 } from "lucide-react";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { SubmitButton } from "@/components/submit-button";
 import { AiConnectionSettings } from "@/components/ai-connection-settings";
@@ -209,12 +211,41 @@ export async function AdminPanel({
             <p className="my-5 rounded-xl bg-slate-50 px-5 py-4 text-center font-mono text-2xl font-bold tracking-[.28em]">{joinCode}</p>
             <form action={rotateJoinCodeAction}><input type="hidden" name="organizationId" value={organizationId} /><SubmitButton className="btn btn-danger" pendingLabel="재발급 중…">입장 코드 재발급</SubmitButton></form>
           </article>
-          <form action={updateReportReferenceAction} className="card p-6">
+          <article className="card p-6">
             <div className="flex items-center gap-3"><FileText className="text-[var(--brand)]" /><div><h2 className="font-extrabold">AI 보고서 레퍼런스</h2><p className="muted text-sm">보고서에 반영할 조직 용어, 작성 원칙, 강조 지표와 예시를 등록하세요.</p></div></div>
-            <input type="hidden" name="organizationId" value={organizationId} />
-            <textarea className="field mt-5 min-h-48" name="reportReference" maxLength={12000} defaultValue={data.currentMembership.organization.reportReference ?? ""} placeholder="예: 임원 보고용 문체, 부서별 핵심 지표, 반드시 포함할 리스크 기준…" />
-            <SubmitButton className="btn btn-primary mt-3" pendingLabel="저장 중…">레퍼런스 저장</SubmitButton>
-          </form>
+            <form action={updateReportReferenceAction}>
+              <input type="hidden" name="organizationId" value={organizationId} />
+              <textarea className="field mt-5 min-h-48" name="reportReference" maxLength={12000} defaultValue={data.currentMembership.organization.reportReference ?? ""} placeholder="예: 임원 보고용 문체, 부서별 핵심 지표, 반드시 포함할 리스크 기준…" />
+              <SubmitButton className="btn btn-primary mt-3" pendingLabel="저장 중…">작성 원칙 저장</SubmitButton>
+            </form>
+            <div className="mt-6 border-t border-[var(--line)] pt-5">
+              <div className="flex items-start gap-3">
+                <Paperclip className="mt-0.5 text-[var(--brand)]" size={19} />
+                <div><h3 className="font-extrabold">보고서 양식 파일</h3><p className="muted mt-1 text-sm leading-6">AI가 첨부 파일의 제목 구성, 섹션 순서, 문체와 레이아웃을 참고해 같은 형태로 보고서를 작성합니다.</p></div>
+              </div>
+              <div className="mt-4 grid gap-2">
+                {data.reportReferenceFiles.map((referenceFile) => (
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--line)] bg-slate-50 px-4 py-3" key={referenceFile.id}>
+                    <div className="min-w-0"><p className="truncate text-sm font-extrabold">{referenceFile.fileName}</p><p className="muted mt-1 text-xs">{(referenceFile.size / 1024 / 1024).toFixed(2)}MB · {referenceFile.updatedAt.toLocaleString("ko-KR")}</p></div>
+                    <form action={deleteReportReferenceFileAction}>
+                      <input type="hidden" name="organizationId" value={organizationId} />
+                      <input type="hidden" name="referenceFileId" value={referenceFile.id} />
+                      <ConfirmSubmitButton className="btn btn-danger" message={`${referenceFile.fileName} 파일을 삭제할까요?`}><Trash2 size={15} /> 삭제</ConfirmSubmitButton>
+                    </form>
+                  </div>
+                ))}
+                {!data.reportReferenceFiles.length && <p className="muted rounded-xl bg-slate-50 px-4 py-3 text-sm">첨부된 양식 파일이 없습니다.</p>}
+              </div>
+              <form action={uploadReportReferenceFileAction} className="mt-4 grid gap-3" encType="multipart/form-data">
+                <input type="hidden" name="organizationId" value={organizationId} />
+                <input className="field file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:font-bold" name="referenceFiles" type="file" accept=".pdf,.txt,.md,.csv,.json,application/pdf,text/plain,text/markdown,text/csv,application/json" multiple required />
+                <div className="flex flex-wrap items-center gap-3">
+                  <SubmitButton className="btn btn-secondary" pendingLabel="첨부 중…"><FileUp size={16} /> 파일 첨부</SubmitButton>
+                  <span className="muted text-xs">여러 파일 선택 가능 · PDF, TXT, MD, CSV, JSON · 파일당 최대 20MB (양식 보존은 PDF 권장)</span>
+                </div>
+              </form>
+            </div>
+          </article>
           <AiConnectionSettings organizationId={organizationId} />
           {data.currentMembership.role === "OWNER" && (
             <section className="rounded-2xl border border-red-200 bg-red-50 p-5">

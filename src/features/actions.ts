@@ -1,5 +1,6 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -20,11 +21,21 @@ import {
   roleCanManageRole,
 } from "@/features/permissions";
 import { scheduleInputSchema } from "@/features/schedule-rules";
+import { deleteR2Object, deleteR2Objects, putR2Object } from "@/lib/r2";
 
 const organizationSchema = z.object({
   name: z.string().trim().min(2).max(60),
   description: z.string().trim().max(500).optional(),
 });
+
+const MAX_REPORT_REFERENCE_FILE_SIZE = 20 * 1024 * 1024;
+const REPORT_REFERENCE_MIME_BY_EXTENSION: Record<string, string> = {
+  pdf: "application/pdf",
+  txt: "text/plain",
+  md: "text/markdown",
+  csv: "text/csv",
+  json: "application/json",
+};
 
 function text(formData: FormData, key: string) {
   const value = formData.get(key);
@@ -667,6 +678,12 @@ export async function deleteOrganizationAction(formData: FormData) {
     throw new AppError("VALIDATION_ERROR", "조직 이름을 정확히 입력해 주세요.");
   }
 
+  const referenceFiles = await prisma.reportReferenceFile.findMany({
+    where: { organizationId },
+    select: { objectKey: true },
+  });
+  await deleteR2Objects(referenceFiles.map((file) => file.objectKey));
+
   await prisma.$transaction(async (tx) => {
     await tx.userPreference.updateMany({
       where: { lastOrganizationId: organizationId },
@@ -1034,6 +1051,83 @@ export async function updateReportReferenceAction(formData: FormData) {
     }),
   ]);
   revalidatePath(`/org/${organizationId}/admin/settings`);
+}
+
+export async function uploadReportReferenceFileAction(formData: FormData) {
+  const organizationId = text(formData, "organizationId");
+  const actor = await requireMembership(organizationId, ["OWNER", "ADMIN"]);
+  const files = formData.getAll("referenceFiles").filter((file): file is File => file instanceof File && file.size > 0);
+  if (!files.length) {
+    throw new AppError("VALIDATION_ERROR", "첨부할 파일을 선택해 주세요.");
+  }
+  const preparedFiles = await Promise.all(files.map(async (file) => {
+    if (file.size > MAX_REPORT_REFERENCE_FILE_SIZE) {
+      throw new AppError("VALIDATION_ERROR", `${file.name}: 레퍼런스 파일은 개별 20MB 이하만 첨부할 수 있습니다.`);
+    }
+    const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
+    const mimeType = REPORT_REFERENCE_MIME_BY_EXTENSION[extension];
+    if (!mimeType) throw new AppError("VALIDATION_ERROR", `${file.name}: PDF, TXT, MD, CSV, JSON 파일만 첨부할 수 있습니다.`);
+    const objectKey = `report-references/${organizationId}/${randomUUID()}.${extension}`;
+    return { file, mimeType, objectKey, data: Buffer.from(await file.arrayBuffer()) };
+  }));
+
+  const uploadedKeys: string[] = [];
+  try {
+    for (const file of preparedFiles) {
+      await putR2Object({ key: file.objectKey, body: file.data, contentType: file.mimeType });
+      uploadedKeys.push(file.objectKey);
+    }
+    await prisma.$transaction(async (tx) => {
+      for (const { file, mimeType, objectKey } of preparedFiles) {
+        const saved = await tx.reportReferenceFile.create({
+          data: { organizationId, fileName: file.name, mimeType, size: file.size, objectKey },
+        });
+        await tx.auditLog.create({
+          data: {
+            organizationId,
+            actorUserId: actor.userId,
+            action: "REPORT_REFERENCE_FILE_UPLOADED",
+            entityType: "REPORT_REFERENCE_FILE",
+            entityId: saved.id,
+            metadataJson: { fileName: file.name, mimeType, size: file.size },
+          },
+        });
+      }
+    });
+  } catch (error) {
+    await deleteR2Objects(uploadedKeys).catch(() => undefined);
+    if (error instanceof AppError) throw error;
+    throw new AppError("INTERNAL_ERROR", "레퍼런스 파일을 R2 저장소에 첨부하지 못했습니다.", 500);
+  }
+  revalidatePath(`/org/${organizationId}/admin/settings`);
+  revalidatePath(`/org/${organizationId}/report`);
+}
+
+export async function deleteReportReferenceFileAction(formData: FormData) {
+  const organizationId = text(formData, "organizationId");
+  const referenceFileId = z.string().uuid().parse(text(formData, "referenceFileId"));
+  const actor = await requireMembership(organizationId, ["OWNER", "ADMIN"]);
+  const referenceFile = await prisma.reportReferenceFile.findFirst({
+    where: { id: referenceFileId, organizationId },
+    select: { id: true, fileName: true, objectKey: true },
+  });
+  if (!referenceFile) return;
+  await deleteR2Object(referenceFile.objectKey);
+  await prisma.$transaction([
+    prisma.reportReferenceFile.delete({ where: { id: referenceFile.id } }),
+    prisma.auditLog.create({
+      data: {
+        organizationId,
+        actorUserId: actor.userId,
+        action: "REPORT_REFERENCE_FILE_DELETED",
+        entityType: "REPORT_REFERENCE_FILE",
+        entityId: referenceFile.id,
+        metadataJson: { fileName: referenceFile.fileName },
+      },
+    }),
+  ]);
+  revalidatePath(`/org/${organizationId}/admin/settings`);
+  revalidatePath(`/org/${organizationId}/report`);
 }
 
 export async function getJoinCode(organizationId: string) {

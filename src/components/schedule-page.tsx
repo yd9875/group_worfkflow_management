@@ -89,7 +89,7 @@ export async function SchedulePage({ organizationId, view, search }: { organizat
       </form>
 
       {view === "day" ? (
-        <DayBoard organizationId={organizationId} schedules={serialized} />
+        <DayBoard organizationId={organizationId} day={selectedDate} departments={context.departments.map(({ id, name, isSystem }) => ({ id, name, isSystem }))} schedules={serialized} />
       ) : view === "week" ? (
         <WeekBoard organizationId={organizationId} days={weekDays} departments={context.departments.map(({ id, name, isSystem }) => ({ id, name, isSystem }))} schedules={serialized} />
       ) : (
