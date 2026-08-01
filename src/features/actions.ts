@@ -361,8 +361,7 @@ const personalEntrySchema = z.object({
   ]),
   isAllDay: z.boolean(),
   isImportant: z.boolean(),
-  showInWeek: z.boolean(),
-  showInMonth: z.boolean(),
+  showInSchedule: z.boolean(),
   isCompleted: z.boolean(),
 }).refine((value) => value.endsAt > value.startsAt, {
   path: ["endsAt"],
@@ -370,18 +369,21 @@ const personalEntrySchema = z.object({
 });
 
 function personalEntryInput(formData: FormData) {
+  const itemType = text(formData, "itemType");
+  const returnDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(text(formData, "returnDate"));
+  const taskStartsAt = new Date(`${returnDate}T00:00:00+09:00`);
+  const taskEndsAt = new Date(taskStartsAt.getTime() + 24 * 60 * 60 * 1000);
   return personalEntrySchema.parse({
-    itemType: text(formData, "itemType"),
+    itemType,
     title: text(formData, "title"),
     description: text(formData, "description") || undefined,
     memo: text(formData, "memo") || undefined,
-    startsAt: text(formData, "startsAt"),
-    endsAt: text(formData, "endsAt"),
+    startsAt: itemType === "TASK" ? taskStartsAt : text(formData, "startsAt"),
+    endsAt: itemType === "TASK" ? taskEndsAt : text(formData, "endsAt"),
     category: text(formData, "category"),
-    isAllDay: formData.get("isAllDay") === "on",
+    isAllDay: itemType === "TASK" || formData.get("isAllDay") === "on",
     isImportant: formData.get("isImportant") === "on",
-    showInWeek: formData.get("showInWeek") === "on",
-    showInMonth: formData.get("showInMonth") === "on",
+    showInSchedule: formData.get("showInSchedule") === "on",
     isCompleted: formData.get("isCompleted") === "on",
   });
 }
@@ -390,8 +392,6 @@ function revalidateScheduleViews(organizationId: string) {
   revalidatePath(`/org/${organizationId}/schedule/day`);
   revalidatePath(`/org/${organizationId}/schedule/week`);
   revalidatePath(`/org/${organizationId}/schedule/month`);
-  revalidatePath(`/org/${organizationId}/schedule/day`);
-  revalidatePath(`/org/${organizationId}/personal`);
   revalidatePath(`/org/${organizationId}/personal`);
 }
 
@@ -399,6 +399,17 @@ export async function createPersonalEntryAction(formData: FormData) {
   const organizationId = text(formData, "organizationId");
   const membership = await requireMembership(organizationId);
   const input = personalEntryInput(formData);
+  const { showInSchedule, ...entryInput } = input;
+  const lastEntry = await prisma.schedule.aggregate({
+    where: {
+      organizationId,
+      targetUserId: membership.userId,
+      scope: "PERSONAL",
+      itemType: input.itemType,
+      deletedAt: null,
+    },
+    _max: { sortOrder: true },
+  });
   const entry = await prisma.schedule.create({
     data: {
       organizationId,
@@ -407,7 +418,10 @@ export async function createPersonalEntryAction(formData: FormData) {
       targetUserId: membership.userId,
       departmentId: null,
       scope: "PERSONAL",
-      ...input,
+      ...entryInput,
+      showInWeek: showInSchedule,
+      showInMonth: showInSchedule,
+      sortOrder: (lastEntry._max.sortOrder ?? -1) + 1,
       description: input.description || null,
       memo: input.memo || null,
       category: input.itemType === "TASK" ? "GENERAL" : input.category,
@@ -439,20 +453,16 @@ export async function updateScheduleAction(formData: FormData) {
     throw new AppError("FORBIDDEN", "이 항목을 수정할 권한이 없습니다.", 403);
   }
   const input = personalEntryInput(formData);
+  const { showInSchedule, ...entryInput } = input;
   await prisma.$transaction([
     prisma.schedule.update({
       where: { id: schedule.id },
       data: {
-        title: input.title,
+        ...entryInput,
         description: input.description || null,
         memo: input.memo || null,
-        startsAt: input.startsAt,
-        endsAt: input.endsAt,
-        isAllDay: input.isAllDay,
-        isImportant: input.isImportant,
-        showInWeek: input.showInWeek,
-        showInMonth: input.showInMonth,
-        isCompleted: input.isCompleted,
+        showInWeek: showInSchedule,
+        showInMonth: showInSchedule,
         itemType: schedule.scope === "PERSONAL" ? input.itemType : schedule.itemType,
         category:
           schedule.scope === "PERSONAL" && input.itemType === "TASK"
@@ -476,31 +486,89 @@ export async function updateScheduleAction(formData: FormData) {
   redirect(`/org/${organizationId}/personal?date=${text(formData, "returnDate")}`);
 }
 
-export async function savePersonalDailyMemoAction(formData: FormData) {
+export async function createPersonalDailyMemoAction(formData: FormData) {
   const organizationId = text(formData, "organizationId");
   const membership = await requireMembership(organizationId);
   const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(text(formData, "date"));
-  const content = z.string().trim().max(20000).parse(text(formData, "content"));
+  const content = z.string().trim().min(1).max(20000).parse(text(formData, "content"));
   const memoDate = new Date(`${date}T00:00:00.000Z`);
-
-  if (content) {
-    await prisma.personalDailyMemo.upsert({
-      where: {
-        organizationId_userId_date: {
-          organizationId,
-          userId: membership.userId,
-          date: memoDate,
-        },
-      },
-      create: { organizationId, userId: membership.userId, date: memoDate, content },
-      update: { content },
-    });
-  } else {
-    await prisma.personalDailyMemo.deleteMany({
-      where: { organizationId, userId: membership.userId, date: memoDate },
-    });
-  }
+  await prisma.personalDailyMemo.create({
+    data: { organizationId, userId: membership.userId, date: memoDate, content },
+  });
   revalidatePath(`/org/${organizationId}/personal`);
+  redirect(`/org/${organizationId}/personal?date=${date}`);
+}
+
+export async function updatePersonalDailyMemoAction(formData: FormData) {
+  const organizationId = text(formData, "organizationId");
+  const membership = await requireMembership(organizationId);
+  const memoId = z.string().uuid().parse(text(formData, "memoId"));
+  const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(text(formData, "date"));
+  const content = z.string().trim().min(1).max(20000).parse(text(formData, "content"));
+  const result = await prisma.personalDailyMemo.updateMany({
+    where: { id: memoId, organizationId, userId: membership.userId },
+    data: { content },
+  });
+  if (!result.count) throw new AppError("NOT_FOUND", "메모를 찾을 수 없습니다.", 404);
+  revalidatePath(`/org/${organizationId}/personal`);
+  redirect(`/org/${organizationId}/personal?date=${date}`);
+}
+
+export async function deletePersonalDailyMemoAction(formData: FormData) {
+  const organizationId = text(formData, "organizationId");
+  const membership = await requireMembership(organizationId);
+  const memoId = z.string().uuid().parse(text(formData, "memoId"));
+  const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(text(formData, "date"));
+  const result = await prisma.personalDailyMemo.deleteMany({
+    where: { id: memoId, organizationId, userId: membership.userId },
+  });
+  if (!result.count) throw new AppError("NOT_FOUND", "메모를 찾을 수 없습니다.", 404);
+  revalidatePath(`/org/${organizationId}/personal`);
+  redirect(`/org/${organizationId}/personal?date=${date}`);
+}
+
+export async function movePersonalEntryAction(formData: FormData) {
+  const organizationId = text(formData, "organizationId");
+  const membership = await requireMembership(organizationId);
+  const scheduleId = z.string().uuid().parse(text(formData, "scheduleId"));
+  const direction = z.enum(["up", "down"]).parse(text(formData, "direction"));
+  const returnDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(text(formData, "returnDate"));
+  const dayStart = new Date(`${returnDate}T00:00:00+09:00`);
+  const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+  const schedule = await prisma.schedule.findFirst({
+    where: {
+      id: scheduleId,
+      organizationId,
+      targetUserId: membership.userId,
+      scope: "PERSONAL",
+      deletedAt: null,
+    },
+  });
+  if (!schedule || !canEditSchedule(membership, schedule)) {
+    throw new AppError("FORBIDDEN", "항목 순서를 변경할 권한이 없습니다.", 403);
+  }
+  const siblings = await prisma.schedule.findMany({
+    where: {
+      organizationId,
+      targetUserId: membership.userId,
+      scope: "PERSONAL",
+      itemType: schedule.itemType,
+      deletedAt: null,
+      startsAt: { lt: dayEnd },
+      endsAt: { gt: dayStart },
+    },
+    select: { id: true },
+    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }, { id: "asc" }],
+  });
+  const currentIndex = siblings.findIndex((item) => item.id === scheduleId);
+  const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+  if (currentIndex < 0 || targetIndex < 0 || targetIndex >= siblings.length) return;
+  const orderedIds = siblings.map((item) => item.id);
+  [orderedIds[currentIndex], orderedIds[targetIndex]] = [orderedIds[targetIndex], orderedIds[currentIndex]];
+  await prisma.$transaction(
+    orderedIds.map((id, sortOrder) => prisma.schedule.update({ where: { id }, data: { sortOrder } })),
+  );
+  revalidateScheduleViews(organizationId);
 }
 
 export async function toggleTaskCompleteAction(formData: FormData) {

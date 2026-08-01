@@ -124,10 +124,9 @@ export async function listSchedules(input: {
       deletedAt: null,
       startsAt: { lt: rangeEnd },
       endsAt: { gt: rangeStart },
-      ...(input.view === "week" ? { showInWeek: true } : {}),
-      ...(input.view === "month" ? { showInMonth: true } : {}),
       AND: [
         visibility,
+        { OR: [{ scope: { not: "PERSONAL" } }, { showInWeek: true }] },
         categoryFilter,
         ...(input.departmentId ? [{ departmentId: input.departmentId }] : []),
         ...(input.memberId
@@ -169,7 +168,7 @@ export async function getPlannerData(
 ) {
   const membership = await requireMembership(organizationId);
   const memoDate = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-  const [items, editItem, personalMemo] = await Promise.all([
+  const [items, editItem, personalMemos] = await Promise.all([
     prisma.schedule.findMany({
       where: {
         organizationId,
@@ -179,29 +178,24 @@ export async function getPlannerData(
         startsAt: { lt: endOfDay(date) },
         endsAt: { gt: startOfDay(date) },
       },
-      orderBy: [{ startsAt: "asc" }, { isImportant: "desc" }],
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
     }),
     editId
       ? prisma.schedule.findFirst({
           where: { id: editId, organizationId, deletedAt: null },
         })
       : null,
-    prisma.personalDailyMemo.findUnique({
-      where: {
-        organizationId_userId_date: {
-          organizationId,
-          userId: membership.userId,
-          date: memoDate,
-        },
-      },
-      select: { content: true },
+    prisma.personalDailyMemo.findMany({
+      where: { organizationId, userId: membership.userId, date: memoDate },
+      select: { id: true, content: true, createdAt: true, updatedAt: true },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     }),
   ]);
   return {
     membership,
     items,
     editItem: editItem && canEditSchedule(membership, editItem) ? editItem : null,
-    personalMemo: personalMemo?.content ?? "",
+    personalMemos,
   };
 }
 

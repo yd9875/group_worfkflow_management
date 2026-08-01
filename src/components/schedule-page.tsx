@@ -45,7 +45,7 @@ export async function SchedulePage({ organizationId, view, search }: { organizat
     creatorProfileName: schedule.createdByUserId ? profileNames.get(schedule.createdByUserId) ?? schedule.createdBy?.name ?? null : null,
   }));
   const dateValue = format(selectedDate, "yyyy-MM-dd");
-  const visibleSchedules = view === "day" ? serialized.filter((schedule) => schedule.scope !== "PERSONAL") : serialized;
+  const visibleSchedules = serialized;
   const querySuffix = (date: Date, keepFilters = true) => {
     const params = new URLSearchParams({ date: format(date, "yyyy-MM-dd") });
     if (keepFilters && search.category) params.set("category", search.category);
@@ -83,7 +83,7 @@ export async function SchedulePage({ organizationId, view, search }: { organizat
         </div>
         <div className="no-print flex flex-wrap gap-2">
           {(context.membership.role === "OWNER" || context.membership.role === "ADMIN") && <Link className="btn btn-primary" href={`/org/${organizationId}/report?view=${view}&date=${dateValue}`}><Sparkles size={17} /> AI 보고서</Link>}
-          {view !== "day" && <Link className="btn btn-secondary" href={`/org/${organizationId}/print?${querySuffix(selectedDate)}`}><Printer size={17} /> 인쇄/PDF</Link>}
+          <Link className="btn btn-secondary" href={`/org/${organizationId}/print?view=${view}&${querySuffix(selectedDate)}`}><Printer size={17} /> 인쇄/PDF</Link>
         </div>
       </header>
 

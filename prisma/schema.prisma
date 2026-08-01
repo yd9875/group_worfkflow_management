@@ -158,8 +158,7 @@ model PersonalDailyMemo {
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([organizationId, userId, date])
-  @@index([userId, date])
+  @@index([organizationId, userId, date, createdAt])
   @@map("personal_daily_memos")
 }
 
@@ -268,6 +267,7 @@ model Schedule {
   showInMonth     Boolean          @default(true)
   isCompleted     Boolean          @default(false)
   memo            String?
+  sortOrder       Int              @default(0)
   departmentId    String?
   targetUserId    String?
   createdAt       DateTime         @default(now())

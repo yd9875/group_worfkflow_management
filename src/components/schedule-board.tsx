@@ -46,7 +46,7 @@ const categoryLabel: Record<string, string> = {
 const externalCategories = new Set(["OUTING", "BUSINESS_TRIP", "TRAINING"]);
 
 function belongsToRow(schedule: ScheduleItem, row: Row) {
-  if (schedule.scope === "PERSONAL") return row.kind === "personal";
+  if (schedule.scope === "PERSONAL") return row.kind === "common";
   if (schedule.category === "LEAVE") return row.kind === "leave";
   if (externalCategories.has(schedule.category)) return row.kind === "external";
   if (schedule.scope === "ORGANIZATION") return row.kind === "common";
@@ -81,7 +81,7 @@ function Item({ schedule, organizationId, rowKind }: { schedule: ScheduleItem; o
         <p className="font-extrabold">{schedule.title}</p>
         <p className="mt-1 text-slate-500">{categoryLabel[schedule.category] ?? schedule.category} · {schedule.isAllDay ? "종일" : `${format(schedule.startsAt, "HH:mm")}–${format(schedule.endsAt, "HH:mm")}`}</p>
         {schedule.description && <p className="mt-2">{schedule.description}</p>}
-        {schedule.memo && <p className="mt-2 flex items-start gap-1 text-slate-600"><StickyNote className="mt-0.5 shrink-0" size={12} /> {schedule.memo}</p>}
+        {schedule.scope !== "PERSONAL" && schedule.memo && <p className="mt-2 flex items-start gap-1 text-slate-600"><StickyNote className="mt-0.5 shrink-0" size={12} /> {schedule.memo}</p>}
         <p className="mt-2 text-slate-500">등록: {schedule.creatorProfileName || "알 수 없음"}</p>
         <div className="mt-2 flex flex-wrap gap-2 no-print">
           <Link className="btn btn-secondary min-h-8 px-2 py-1 text-xs" href={`/org/${organizationId}/personal?date=${format(schedule.startsAt, "yyyy-MM-dd")}&edit=${schedule.id}`}><Pencil size={12} /> 수정</Link>
@@ -155,8 +155,8 @@ export function DayBoard({ organizationId, day, departments, schedules }: {
                         <h2 className={`mt-3 text-lg font-extrabold ${schedule.isCompleted ? "line-through" : ""}`}>{schedule.title}</h2>
                         <p className="muted mt-2 flex flex-wrap items-center gap-2 text-sm"><Clock3 size={15} /> {schedule.isAllDay ? "종일" : `${format(schedule.startsAt, "HH:mm")} – ${format(schedule.endsAt, "HH:mm")}`}<span>·</span><span>{schedule.targetUserName || schedule.creatorProfileName || "담당자 없음"}</span></p>
                         {schedule.description && <p className="mt-3 whitespace-pre-wrap text-sm leading-6">{schedule.description}</p>}
-                        {schedule.memo && <div className="mt-3 rounded-xl bg-amber-50 p-3 text-sm leading-6 text-amber-900"><StickyNote className="mr-2 inline" size={15} />{schedule.memo}</div>}
-                        {schedule.scope === "PERSONAL" && <p className="muted mt-3 text-xs">주간 표시 {schedule.showInWeek ? "켜짐" : "꺼짐"} · 월간 표시 {schedule.showInMonth ? "켜짐" : "꺼짐"}</p>}
+                        {schedule.scope !== "PERSONAL" && schedule.memo && <div className="mt-3 rounded-xl bg-amber-50 p-3 text-sm leading-6 text-amber-900"><StickyNote className="mr-2 inline" size={15} />{schedule.memo}</div>}
+                        {schedule.scope === "PERSONAL" && <p className="muted mt-3 text-xs">일정표 표시 {schedule.showInWeek ? "켜짐" : "꺼짐"}</p>}
                       </div>
                       <div className="flex flex-wrap gap-2 no-print">
                         {schedule.itemType === "TASK" && <form action={toggleTaskCompleteAction}><input type="hidden" name="organizationId" value={organizationId} /><input type="hidden" name="scheduleId" value={schedule.id} /><SubmitButton className="btn btn-secondary" pendingLabel="변경 중…"><CheckCircle2 size={16} /> {schedule.isCompleted ? "미완료로" : "완료"}</SubmitButton></form>}
