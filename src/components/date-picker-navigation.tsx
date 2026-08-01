@@ -100,6 +100,7 @@ export function DatePickerNavigation({
                   aria-label={format(day, "yyyy년 M월 d일")}
                   aria-pressed={selected}
                   className={`grid aspect-square place-items-center rounded-lg text-sm font-bold transition hover:bg-[var(--brand-soft)] hover:text-[var(--brand-strong)] ${selected ? "bg-[var(--brand)] text-white hover:bg-[var(--brand-strong)] hover:text-white" : ""} ${!isSameMonth(day, visibleMonth) ? "text-slate-300" : ""}`}
+                  data-loading-overlay={selected ? undefined : ""}
                   key={day.toISOString()}
                   type="button"
                   onClick={() => selectDate(day)}

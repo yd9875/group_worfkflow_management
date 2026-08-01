@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { AlertCircle, LoaderCircle, RefreshCw, Sparkles } from "lucide-react";
+import { LoadingOverlay } from "@/components/loading-overlay";
 import { getAiProvider, readAiBrowserSettings } from "@/lib/ai-browser-settings";
 
 type Status = "idle" | "loading" | "ready" | "missing" | "error";
@@ -54,6 +55,7 @@ export function AiReportGenerator({ organizationId, date, view }: {
       {status === "missing" && <div className="p-8 text-center"><AlertCircle className="mx-auto text-[var(--accent)]" /><p className="mt-3 font-bold">API 키가 필요합니다</p><p className="muted mt-1 text-sm">키는 서버에 저장되지 않고 현재 브라우저에만 보관됩니다.</p><Link className="btn btn-primary mt-4" href={`/org/${organizationId}/admin/settings`}>조직 관리에서 설정</Link></div>}
       {status === "error" && <div className="p-8 text-center"><AlertCircle className="mx-auto text-red-600" /><p className="mt-3 font-bold text-red-800">생성 중 문제가 발생했습니다</p><p className="muted mt-1 text-sm">{message}</p></div>}
       {status === "ready" && <div className="whitespace-pre-wrap p-6 text-sm leading-7 sm:p-8">{report}</div>}
+      {status === "loading" && <LoadingOverlay label="AI 보고서를 생성하는 중…" />}
     </section>
   );
 }

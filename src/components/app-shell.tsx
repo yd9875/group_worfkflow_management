@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import {
   Bell,
@@ -18,6 +18,7 @@ import {
   Users,
 } from "lucide-react";
 import { SignOutButton } from "@/components/sign-out-button";
+import { LoadingOverlay } from "@/components/loading-overlay";
 
 type Props = {
   organizationId: string;
@@ -29,6 +30,60 @@ type Props = {
   children: React.ReactNode;
 };
 
+function NavigationLoadingBoundary({ children }: { children: React.ReactNode }) {
+  const [isNavigating, setIsNavigating] = useState(false);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, []);
+
+  const startNavigation = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (
+      event.defaultPrevented ||
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    ) return;
+
+    const target = event.target as HTMLElement;
+    const explicitTrigger = target.closest<HTMLElement>("[data-loading-overlay]");
+    const link = target.closest<HTMLAnchorElement>("a[href]");
+    if (explicitTrigger) {
+      setIsNavigating(true);
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      timeoutRef.current = setTimeout(() => setIsNavigating(false), 12_000);
+      return;
+    }
+    if (!link || link.target === "_blank" || link.hasAttribute("download")) return;
+
+    const destination = new URL(link.href, window.location.href);
+    const current = new URL(window.location.href);
+    if (
+      destination.origin !== current.origin ||
+      destination.href === current.href ||
+      (destination.pathname === current.pathname &&
+        destination.search === current.search &&
+        destination.hash !== current.hash)
+    ) return;
+
+    setIsNavigating(true);
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => setIsNavigating(false), 12_000);
+  };
+
+  return (
+    <div className="app-grid" onClickCapture={startNavigation}>
+      {children}
+      {isNavigating && <LoadingOverlay label="페이지를 불러오는 중…" />}
+    </div>
+  );
+}
+
 export function AppShell({
   organizationId,
   organizationName,
@@ -39,6 +94,7 @@ export function AppShell({
   children,
 }: Props) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const sidebarRef = useRef<HTMLElement>(null);
   const [showMobileScrollHint, setShowMobileScrollHint] = useState(false);
   const root = `/org/${organizationId}`;
@@ -74,7 +130,7 @@ export function AppShell({
   }, [role, unreadCount]);
 
   return (
-    <div className="app-grid">
+    <NavigationLoadingBoundary key={`${pathname}?${searchParams.toString()}`}>
       <aside className="sidebar" ref={sidebarRef}>
         <div className="sidebar-brand mb-5 flex items-center gap-3 px-2 py-2">
           <span className="grid size-10 place-items-center rounded-xl bg-[var(--brand)] text-white"><CalendarDays size={20} /></span>
@@ -150,6 +206,6 @@ export function AppShell({
       <section className="app-main">
         <main className="content">{children}</main>
       </section>
-    </div>
+    </NavigationLoadingBoundary>
   );
 }
