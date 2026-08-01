@@ -253,7 +253,7 @@ export async function AdminPanel({
               </div>
               <form action={uploadReportReferenceFileAction} className="mt-4 grid gap-3" encType="multipart/form-data">
                 <input type="hidden" name="organizationId" value={organizationId} />
-                <input className="field file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:font-bold" name="referenceFiles" type="file" accept=".pdf,.txt,.md,.csv,.json,application/pdf,text/plain,text/markdown,text/csv,application/json" multiple required />
+                <input className="field cursor-pointer transition hover:border-[var(--brand)] hover:bg-[var(--brand-soft)] hover:shadow-md file:mr-3 file:cursor-pointer file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:font-bold" name="referenceFiles" type="file" accept=".pdf,.txt,.md,.csv,.json,application/pdf,text/plain,text/markdown,text/csv,application/json" multiple required />
                 <div className="flex flex-wrap items-center gap-3">
                   <SubmitButton className="btn btn-secondary" pendingLabel="첨부 중…"><FileUp size={16} /> 파일 첨부</SubmitButton>
                   <span className="muted text-xs">여러 파일 선택 가능 · PDF, TXT, MD, CSV, JSON · 파일당 최대 20MB (양식 보존은 PDF 권장)</span>
