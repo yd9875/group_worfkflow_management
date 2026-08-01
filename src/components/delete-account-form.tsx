@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { AlertTriangle, Trash2 } from "lucide-react";
+import { LoadingOverlay } from "@/components/loading-overlay";
 
 export function DeleteAccountForm({
   blocked,
@@ -42,6 +43,7 @@ export function DeleteAccountForm({
 
   return (
     <form className="card border-red-200 p-5 sm:p-6" onSubmit={onSubmit}>
+      {loading && <LoadingOverlay label="회원 탈퇴 처리 중" />}
       <div className="flex items-start gap-3">
         <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-red-50 text-[var(--danger)]">
           <AlertTriangle size={20} />

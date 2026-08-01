@@ -1,6 +1,7 @@
 "use client";
 
 import { useFormStatus } from "react-dom";
+import { LoadingOverlay } from "@/components/loading-overlay";
 
 export function SubmitButton({
   children,
@@ -11,8 +12,11 @@ export function SubmitButton({
   const { pending } = useFormStatus();
 
   return (
-    <button {...props} disabled={disabled || pending} type="submit">
-      {pending ? pendingLabel : children}
-    </button>
+    <>
+      <button {...props} disabled={disabled || pending} type="submit">
+        {pending ? pendingLabel : children}
+      </button>
+      {pending && <LoadingOverlay label={pendingLabel} />}
+    </>
   );
 }

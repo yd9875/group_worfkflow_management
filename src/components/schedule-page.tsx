@@ -5,6 +5,7 @@ import { CalendarDays, ChevronLeft, ChevronRight, Printer, SlidersHorizontal, Sp
 import { getScheduleContext, listSchedules } from "@/features/queries";
 import { DayBoard, MonthBoard, ScheduleItem, WeekBoard } from "@/components/schedule-board";
 import { DatePickerNavigation } from "@/components/date-picker-navigation";
+import { SubmitButton } from "@/components/submit-button";
 
 type SearchValue = string | string[] | undefined;
 type Search = {
@@ -126,7 +127,7 @@ export async function SchedulePage({ organizationId, view, search }: { organizat
         </fieldset>
         <label className="label min-w-36 flex-1">부서<select className="field" name="department" defaultValue={department ?? ""}><option value="">전체 부서</option>{context.departments.filter((item) => !item.isSystem).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
         <label className="label min-w-36 flex-1">구성원<select className="field" name="member" defaultValue={member ?? ""}><option value="">전체 구성원</option>{context.members.map((item) => <option key={item.userId} value={item.userId}>{item.profileName?.trim() || item.user.name}</option>)}</select></label>
-        <button className="btn btn-secondary" type="submit">필터 적용</button>
+        <SubmitButton className="btn btn-secondary" pendingLabel="필터 적용 중…">필터 적용</SubmitButton>
         <Link className="btn btn-quiet" href={`/org/${organizationId}/schedule/${view}?date=${dateValue}`}>초기화</Link>
       </form>
 

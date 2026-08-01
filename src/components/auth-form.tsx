@@ -8,6 +8,7 @@ import {
   PRIVACY_POLICY_VERSION,
   SIGNUP_PRIVACY_NOTICE,
 } from "@/lib/privacy";
+import { LoadingOverlay } from "@/components/loading-overlay";
 
 type Mode = "login" | "signup" | "forgot" | "reset";
 
@@ -118,6 +119,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
 
   return (
     <div className="auth-shell">
+      {loading && <LoadingOverlay label={`${current.submit} 처리 중`} />}
       <section className="auth-story" aria-label="서비스 소개">
         <div className="relative z-10 flex items-center gap-3 text-lg font-bold">
           <span className="grid size-10 place-items-center rounded-xl bg-white/12">
