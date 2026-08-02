@@ -74,12 +74,24 @@ function itemSummary(schedule: ScheduleItem, rowKind?: Row["kind"]) {
     : `${!schedule.isAllDay ? `${format(schedule.startsAt, "HH:mm")} ` : ""}${schedule.title}`;
 }
 
-function Item({ schedule, organizationId, rowKind }: { schedule: ScheduleItem; organizationId: string; rowKind?: Row["kind"] }) {
+function Item({
+  schedule,
+  organizationId,
+  rowKind,
+  showCreator = false,
+}: {
+  schedule: ScheduleItem;
+  organizationId: string;
+  rowKind?: Row["kind"];
+  showCreator?: boolean;
+}) {
+  const shouldShowCreator = showCreator && rowKind !== "leave" && rowKind !== "external" && schedule.creatorProfileName;
   return (
     <details className={`schedule-item ${schedule.isImportant ? "schedule-item-important" : ""} ${schedule.isCompleted ? "schedule-item-completed" : ""}`} title={schedule.title}>
       <summary className="cursor-pointer list-none font-bold">
         {schedule.isImportant && <Flag className="mr-1 inline" size={11} />}
         {itemSummary(schedule, rowKind)}
+        {shouldShowCreator && <span className="mt-0.5 block text-[10px] font-medium text-slate-500">{schedule.creatorProfileName}</span>}
       </summary>
       <div className="mt-2 whitespace-normal rounded-md bg-white/80 p-2 text-xs leading-5 shadow-sm">
         <p className="font-extrabold">{schedule.title}</p>
@@ -112,7 +124,7 @@ export function WeekBoard({ organizationId, days, departments, schedules }: { or
       <div className="week-grid">
         <div className="week-cell week-head week-label grid place-items-center font-extrabold">구분</div>
         {days.map((day) => <div key={day.toISOString()} className={`week-cell week-head grid place-items-center ${isToday(day) ? "today" : ""}`}><span className="text-sm font-extrabold">{format(day, "M.d")}</span><span className="muted text-xs">{format(day, "EEE", { locale: ko })}</span></div>)}
-        {rows.map((row) => <div key={row.id} className="contents"><div className="week-cell week-label flex items-center font-bold">{row.label}</div>{days.map((day) => { const items = schedules.filter((schedule) => belongsToRow(schedule, row) && occursOnDay(schedule, day)); return <div key={`${row.id}-${day.toISOString()}`} className={`week-cell ${isToday(day) ? "today" : ""}`}>{items.map((schedule) => <Item key={schedule.id} schedule={schedule} organizationId={organizationId} rowKind={row.kind} />)}</div>; })}</div>)}
+        {rows.map((row) => <div key={row.id} className="contents"><div className="week-cell week-label flex items-center font-bold">{row.label}</div>{days.map((day) => { const items = schedules.filter((schedule) => belongsToRow(schedule, row) && occursOnDay(schedule, day)); return <div key={`${row.id}-${day.toISOString()}`} className={`week-cell ${isToday(day) ? "today" : ""}`}>{items.map((schedule) => <Item key={schedule.id} schedule={schedule} organizationId={organizationId} rowKind={row.kind} showCreator />)}</div>; })}</div>)}
       </div>
     </div>
   );
