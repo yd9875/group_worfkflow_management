@@ -244,10 +244,12 @@ export async function listNotifications(organizationId: string) {
   });
 }
 
-export async function getAdminData(organizationId: string) {
+export type AdminSection = "requests" | "departments" | "members" | "settings" | "audit-logs";
+
+export async function getAdminData(organizationId: string, section: AdminSection) {
   const currentMembership = await requireMembership(organizationId, ["OWNER", "ADMIN"]);
   const [requests, departments, members, auditLogs, reportReferenceFiles, savedReportPrinciples] = await Promise.all([
-    prisma.joinRequest.findMany({
+    section === "requests" ? prisma.joinRequest.findMany({
       where: { organizationId, status: "PENDING" },
       select: {
         id: true,
@@ -256,8 +258,8 @@ export async function getAdminData(organizationId: string) {
       },
       orderBy: { requestedAt: "asc" },
       take: 100,
-    }),
-    prisma.department.findMany({
+    }) : Promise.resolve([]),
+    section === "requests" || section === "departments" || section === "members" ? prisma.department.findMany({
       where: { organizationId, isActive: true },
       select: {
         id: true,
@@ -268,8 +270,8 @@ export async function getAdminData(organizationId: string) {
         sortOrder: true,
       },
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-    }),
-    prisma.membership.findMany({
+    }) : Promise.resolve([]),
+    section === "members" ? prisma.membership.findMany({
       where: { organizationId },
       select: {
         id: true,
@@ -282,8 +284,8 @@ export async function getAdminData(organizationId: string) {
       },
       orderBy: { joinedAt: "asc" },
       take: 250,
-    }),
-    prisma.auditLog.findMany({
+    }) : Promise.resolve([]),
+    section === "audit-logs" ? prisma.auditLog.findMany({
       where: { organizationId },
       select: {
         id: true,
@@ -294,17 +296,17 @@ export async function getAdminData(organizationId: string) {
       },
       orderBy: { createdAt: "desc" },
       take: 100,
-    }),
-    prisma.reportReferenceFile.findMany({
+    }) : Promise.resolve([]),
+    section === "settings" ? prisma.reportReferenceFile.findMany({
       where: { organizationId },
       select: { id: true, fileName: true, mimeType: true, size: true, updatedAt: true },
       orderBy: { createdAt: "asc" },
-    }),
-    prisma.reportReferencePrinciple.findMany({
+    }) : Promise.resolve([]),
+    section === "settings" ? prisma.reportReferencePrinciple.findMany({
       where: { organizationId },
       select: { id: true, content: true },
       orderBy: { createdAt: "asc" },
-    }),
+    }) : Promise.resolve([]),
   ]);
   const reportPrinciples = [
     ...(currentMembership.organization.reportReference?.trim()
@@ -312,5 +314,8 @@ export async function getAdminData(organizationId: string) {
       : []),
     ...savedReportPrinciples,
   ];
-  return { currentMembership, requests, departments, members, auditLogs, reportReferenceFiles, reportPrinciples };
+  const joinCode = section === "settings"
+    ? decryptJoinCode(currentMembership.organization.joinCodeCiphertext)
+    : null;
+  return { currentMembership, requests, departments, members, auditLogs, reportReferenceFiles, reportPrinciples, joinCode };
 }

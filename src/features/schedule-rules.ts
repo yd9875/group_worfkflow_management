@@ -63,3 +63,26 @@ export function overlaps(
 ) {
   return startsAt < rangeEnd && endsAt > rangeStart;
 }
+
+export function adjacentSortUpdates(
+  entries: Array<{ id: string; sortOrder: number }>,
+  currentId: string,
+  direction: "up" | "down",
+) {
+  const currentIndex = entries.findIndex((entry) => entry.id === currentId);
+  const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+  if (currentIndex < 0 || targetIndex < 0 || targetIndex >= entries.length) return [];
+
+  const current = entries[currentIndex];
+  const target = entries[targetIndex];
+  if (current.sortOrder === target.sortOrder) {
+    const orderedIds = entries.map((entry) => entry.id);
+    [orderedIds[currentIndex], orderedIds[targetIndex]] = [orderedIds[targetIndex], orderedIds[currentIndex]];
+    return orderedIds.map((id, sortOrder) => ({ id, sortOrder }));
+  }
+
+  return [
+    { id: current.id, sortOrder: target.sortOrder },
+    { id: target.id, sortOrder: current.sortOrder },
+  ];
+}

@@ -112,6 +112,8 @@ function EntryCard({ organizationId, date, item, index, total }: {
             <form action={toggleTaskCompleteAction}>
               <input type="hidden" name="organizationId" value={organizationId} />
               <input type="hidden" name="scheduleId" value={item.id} />
+              <input type="hidden" name="nextCompleted" value={item.isCompleted ? "false" : "true"} />
+              <input type="hidden" name="returnView" value="personal" />
               <SubmitButton className="btn btn-secondary min-h-8 px-2 py-1 text-xs" pendingLabel="처리 중…">{item.isCompleted ? "완료 취소" : "완료 처리"}</SubmitButton>
             </form>
           )}

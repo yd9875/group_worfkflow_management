@@ -9,7 +9,6 @@ import { prisma } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import {
   createJoinCode,
-  decryptJoinCode,
   encryptJoinCode,
   hashJoinCode,
   normalizeJoinCode,
@@ -18,9 +17,10 @@ import { requireMembership, requireUser } from "@/lib/session";
 import {
   canCreateSchedule,
   canEditSchedule,
+  isManager,
   roleCanManageRole,
 } from "@/features/permissions";
-import { scheduleInputSchema } from "@/features/schedule-rules";
+import { adjacentSortUpdates, scheduleInputSchema } from "@/features/schedule-rules";
 import { deleteR2Object, deleteR2Objects, putR2Object } from "@/lib/r2";
 
 const organizationSchema = z.object({
@@ -156,17 +156,14 @@ export async function requestJoinAction(formData: FormData) {
   revalidatePath("/organizations");
 }
 
-async function scheduleRecipients(
-  tx: Prisma.TransactionClient,
-  input: {
-    organizationId: string;
-    scope: "ORGANIZATION" | "DEPARTMENT" | "PERSONAL";
-    departmentId?: string | null;
-    targetUserId?: string | null;
-  },
-) {
+async function scheduleRecipients(input: {
+  organizationId: string;
+  scope: "ORGANIZATION" | "DEPARTMENT" | "PERSONAL";
+  departmentId?: string | null;
+  targetUserId?: string | null;
+}) {
   if (input.scope === "PERSONAL") return input.targetUserId ? [input.targetUserId] : [];
-  const memberships = await tx.membership.findMany({
+  const memberships = await prisma.membership.findMany({
     where: {
       organizationId: input.organizationId,
       status: "ACTIVE",
@@ -202,11 +199,15 @@ export async function createScheduleAction(formData: FormData) {
     throw new AppError("FORBIDDEN", "이 범위의 일정을 등록할 권한이 없습니다.", 403);
   }
 
-  if (parsed.departmentId) {
-    const department = await prisma.department.findFirst({
+  const shouldNotify = parsed.isImportant || parsed.scope !== "PERSONAL";
+  const [department, recipients] = await Promise.all([
+    parsed.departmentId ? prisma.department.findFirst({
       where: { id: parsed.departmentId, organizationId, isActive: true },
-    });
-    if (!department) throw new AppError("VALIDATION_ERROR", "대상 부서가 올바르지 않습니다.");
+    }) : Promise.resolve(null),
+    shouldNotify ? scheduleRecipients(parsed) : Promise.resolve([]),
+  ]);
+  if (parsed.departmentId && !department) {
+    throw new AppError("VALIDATION_ERROR", "대상 부서가 올바르지 않습니다.");
   }
   if (parsed.targetUserId) {
     const target = await prisma.membership.findUnique({
@@ -222,9 +223,22 @@ export async function createScheduleAction(formData: FormData) {
     }
   }
 
-  await prisma.$transaction(async (tx) => {
-    const schedule = await tx.schedule.create({
+  const scheduleId = randomUUID();
+  const notifications = recipients
+    .filter((userId) => userId !== membership.userId)
+    .map((userId) => ({
+      userId,
+      organizationId,
+      type: "SCHEDULE_CREATED",
+      title: parsed.isImportant ? "중요 일정이 등록되었습니다" : "새 일정이 등록되었습니다",
+      body: parsed.title,
+      resourceType: "SCHEDULE",
+      resourceId: scheduleId,
+    }));
+  const writes: Prisma.PrismaPromise<unknown>[] = [
+    prisma.schedule.create({
       data: {
+        id: scheduleId,
         ...parsed,
         itemType: "SCHEDULE",
         description: parsed.description || null,
@@ -233,34 +247,22 @@ export async function createScheduleAction(formData: FormData) {
         createdByUserId: membership.userId,
         updatedByUserId: membership.userId,
       },
-    });
-    const recipients = await scheduleRecipients(tx, parsed);
-    if (parsed.isImportant || parsed.scope !== "PERSONAL") {
-      await tx.notification.createMany({
-        data: recipients
-          .filter((userId) => userId !== membership.userId)
-          .map((userId) => ({
-            userId,
-            organizationId,
-            type: "SCHEDULE_CREATED",
-            title: parsed.isImportant ? "중요 일정이 등록되었습니다" : "새 일정이 등록되었습니다",
-            body: parsed.title,
-            resourceType: "SCHEDULE",
-            resourceId: schedule.id,
-          })),
-      });
-    }
-    await tx.auditLog.create({
+    }),
+    prisma.auditLog.create({
       data: {
         organizationId,
         actorUserId: membership.userId,
         action: "SCHEDULE_CREATED",
         entityType: "SCHEDULE",
-        entityId: schedule.id,
-        metadataJson: { scope: schedule.scope, category: schedule.category },
+        entityId: scheduleId,
+        metadataJson: { scope: parsed.scope, category: parsed.category },
       },
-    });
-  });
+    }),
+  ];
+  if (notifications.length) {
+    writes.push(prisma.notification.createMany({ data: notifications }));
+  }
+  await prisma.$transaction(writes);
   revalidatePath(`/org/${organizationId}/schedule/week`);
   revalidatePath(`/org/${organizationId}/schedule/month`);
   revalidatePath(`/org/${organizationId}/schedule/day`);
@@ -308,9 +310,11 @@ export async function createTaskAction(formData: FormData) {
   const startsAt = new Date(`${input.date}T00:00:00+09:00`);
   const endsAt = new Date(startsAt.getTime() + 24 * 60 * 60 * 1000);
 
-  await prisma.$transaction(async (tx) => {
-    const task = await tx.schedule.create({
+  const taskId = randomUUID();
+  await prisma.$transaction([
+    prisma.schedule.create({
       data: {
+        id: taskId,
         organizationId,
         createdByUserId: membership.userId,
         updatedByUserId: membership.userId,
@@ -326,18 +330,18 @@ export async function createTaskAction(formData: FormData) {
         departmentId: input.scope === "DEPARTMENT" ? input.departmentId : null,
         targetUserId: null,
       },
-    });
-    await tx.auditLog.create({
+    }),
+    prisma.auditLog.create({
       data: {
         organizationId,
         actorUserId: membership.userId,
         action: "TASK_CREATED",
         entityType: "SCHEDULE",
-        entityId: task.id,
+        entityId: taskId,
         metadataJson: { important: input.isImportant },
       },
-    });
-  });
+    }),
+  ]);
   revalidatePath(`/org/${organizationId}/schedule/week`);
   revalidatePath(`/org/${organizationId}/schedule/month`);
   revalidatePath(`/org/${organizationId}/schedule/day`);
@@ -392,10 +396,7 @@ function personalEntryInput(formData: FormData) {
   });
 }
 
-function revalidateScheduleViews(organizationId: string) {
-  revalidatePath(`/org/${organizationId}/schedule/day`);
-  revalidatePath(`/org/${organizationId}/schedule/week`);
-  revalidatePath(`/org/${organizationId}/schedule/month`);
+function revalidatePersonalPlanner(organizationId: string) {
   revalidatePath(`/org/${organizationId}/personal`);
 }
 
@@ -417,34 +418,38 @@ export async function createPersonalEntryAction(formData: FormData) {
     },
     _max: { sortOrder: true },
   });
-  const entry = await prisma.schedule.create({
-    data: {
-      organizationId,
-      createdByUserId: membership.userId,
-      updatedByUserId: membership.userId,
-      targetUserId: membership.userId,
-      departmentId,
-      scope: "PERSONAL",
-      ...entryInput,
-      showInWeek: showInSchedule,
-      showInMonth: showInSchedule,
-      sortOrder: (lastEntry._max.sortOrder ?? -1) + 1,
-      description: input.description || null,
-      memo: input.memo || null,
-      category: input.itemType === "TASK" ? "GENERAL" : input.category,
-    },
-  });
-  await prisma.auditLog.create({
-    data: {
-      organizationId,
-      actorUserId: membership.userId,
-      action: "PERSONAL_ENTRY_CREATED",
-      entityType: "SCHEDULE",
-      entityId: entry.id,
-      metadataJson: { itemType: entry.itemType },
-    },
-  });
-  revalidateScheduleViews(organizationId);
+  const entryId = randomUUID();
+  await prisma.$transaction([
+    prisma.schedule.create({
+      data: {
+        id: entryId,
+        organizationId,
+        createdByUserId: membership.userId,
+        updatedByUserId: membership.userId,
+        targetUserId: membership.userId,
+        departmentId,
+        scope: "PERSONAL",
+        ...entryInput,
+        showInWeek: showInSchedule,
+        showInMonth: showInSchedule,
+        sortOrder: (lastEntry._max.sortOrder ?? -1) + 1,
+        description: input.description || null,
+        memo: input.memo || null,
+        category: input.itemType === "TASK" ? "GENERAL" : input.category,
+      },
+    }),
+    prisma.auditLog.create({
+      data: {
+        organizationId,
+        actorUserId: membership.userId,
+        action: "PERSONAL_ENTRY_CREATED",
+        entityType: "SCHEDULE",
+        entityId: entryId,
+        metadataJson: { itemType: input.itemType },
+      },
+    }),
+  ]);
+  revalidatePersonalPlanner(organizationId);
   redirect(`/org/${organizationId}/personal?date=${text(formData, "returnDate")}`);
 }
 
@@ -493,7 +498,7 @@ export async function updateScheduleAction(formData: FormData) {
       },
     }),
   ]);
-  revalidateScheduleViews(organizationId);
+  revalidatePersonalPlanner(organizationId);
   redirect(`/org/${organizationId}/personal?date=${text(formData, "returnDate")}`);
 }
 
@@ -546,57 +551,69 @@ export async function movePersonalEntryAction(formData: FormData) {
   const returnDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(text(formData, "returnDate"));
   const dayStart = new Date(`${returnDate}T00:00:00+09:00`);
   const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
-  const schedule = await prisma.schedule.findFirst({
-    where: {
-      id: scheduleId,
-      organizationId,
-      targetUserId: membership.userId,
-      scope: "PERSONAL",
-      deletedAt: null,
-    },
-  });
-  if (!schedule || !canEditSchedule(membership, schedule)) {
-    throw new AppError("FORBIDDEN", "항목 순서를 변경할 권한이 없습니다.", 403);
-  }
-  const siblings = await prisma.schedule.findMany({
+  const entries = await prisma.schedule.findMany({
     where: {
       organizationId,
       targetUserId: membership.userId,
       scope: "PERSONAL",
-      itemType: schedule.itemType,
       deletedAt: null,
       startsAt: { lt: dayEnd },
       endsAt: { gt: dayStart },
     },
-    select: { id: true },
+    select: { id: true, itemType: true, sortOrder: true },
     orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }, { id: "asc" }],
   });
-  const currentIndex = siblings.findIndex((item) => item.id === scheduleId);
-  const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
-  if (currentIndex < 0 || targetIndex < 0 || targetIndex >= siblings.length) return;
-  const orderedIds = siblings.map((item) => item.id);
-  [orderedIds[currentIndex], orderedIds[targetIndex]] = [orderedIds[targetIndex], orderedIds[currentIndex]];
-  await prisma.$transaction(
-    orderedIds.map((id, sortOrder) => prisma.schedule.update({ where: { id }, data: { sortOrder } })),
+  const selected = entries.find((entry) => entry.id === scheduleId);
+  if (!selected) throw new AppError("FORBIDDEN", "항목 순서를 변경할 권한이 없습니다.", 403);
+  const updates = adjacentSortUpdates(
+    entries.filter((entry) => entry.itemType === selected.itemType),
+    scheduleId,
+    direction,
   );
-  revalidateScheduleViews(organizationId);
+  if (!updates.length) return;
+  await prisma.$transaction(
+    updates.map(({ id, sortOrder }) => prisma.schedule.update({ where: { id }, data: { sortOrder } })),
+  );
+  revalidatePersonalPlanner(organizationId);
 }
 
 export async function toggleTaskCompleteAction(formData: FormData) {
   const organizationId = text(formData, "organizationId");
   const scheduleId = z.string().uuid().parse(text(formData, "scheduleId"));
   const membership = await requireMembership(organizationId);
-  const schedule = await prisma.schedule.findFirst({
-    where: { id: scheduleId, organizationId, deletedAt: null },
+  const nextCompleted = z.enum(["true", "false"]).parse(text(formData, "nextCompleted")) === "true";
+  const returnView = z.enum(["personal", "day"]).parse(text(formData, "returnView"));
+  const editableScope: Prisma.ScheduleWhereInput = isManager(membership.role)
+    ? {
+        OR: [
+          { scope: { not: "PERSONAL" } },
+          { scope: "PERSONAL", targetUserId: membership.userId },
+        ],
+      }
+    : {
+        OR: [
+          { scope: "PERSONAL", targetUserId: membership.userId },
+          {
+            scope: "DEPARTMENT",
+            departmentId: membership.departmentId,
+            createdByUserId: membership.userId,
+          },
+        ],
+      };
+  const result = await prisma.schedule.updateMany({
+    where: {
+      id: scheduleId,
+      organizationId,
+      itemType: "TASK",
+      deletedAt: null,
+      AND: [editableScope],
+    },
+    data: { isCompleted: nextCompleted, updatedByUserId: membership.userId },
   });
-  if (!schedule || !canEditSchedule(membership, schedule)) {
+  if (!result.count) {
     throw new AppError("FORBIDDEN", "이 업무의 완료 상태를 변경할 수 없습니다.", 403);
   }
-  await prisma.schedule.update({
-    where: { id: schedule.id },
-    data: { isCompleted: !schedule.isCompleted, updatedByUserId: membership.userId },
-  });
-  revalidateScheduleViews(organizationId);
+  revalidatePath(`/org/${organizationId}/${returnView === "personal" ? "personal" : "schedule/day"}`);
 }
 
 export async function deleteScheduleAction(formData: FormData) {
@@ -644,19 +661,22 @@ export async function createDepartmentAction(formData: FormData) {
       name: text(formData, "name"),
       description: text(formData, "description") || undefined,
     });
-  const department = await prisma.department.create({
-    data: { organizationId, ...input },
-  });
-  await prisma.auditLog.create({
-    data: {
-      organizationId,
-      actorUserId: membership.userId,
-      action: "DEPARTMENT_CREATED",
-      entityType: "DEPARTMENT",
-      entityId: department.id,
-      metadataJson: { name: department.name },
-    },
-  });
+  const departmentId = randomUUID();
+  await prisma.$transaction([
+    prisma.department.create({
+      data: { id: departmentId, organizationId, ...input },
+    }),
+    prisma.auditLog.create({
+      data: {
+        organizationId,
+        actorUserId: membership.userId,
+        action: "DEPARTMENT_CREATED",
+        entityType: "DEPARTMENT",
+        entityId: departmentId,
+        metadataJson: { name: input.name },
+      },
+    }),
+  ]);
   revalidatePath(`/org/${organizationId}/admin/departments`);
 }
 
@@ -914,23 +934,25 @@ export async function updateMemberAction(formData: FormData) {
   const organizationId = text(formData, "organizationId");
   const actor = await requireMembership(organizationId, ["OWNER", "ADMIN"]);
   const membershipId = text(formData, "membershipId");
-  const member = await prisma.membership.findFirst({
-    where: { id: membershipId, organizationId },
-  });
+  const nextDepartmentId = text(formData, "departmentId");
+  const [member, department] = await Promise.all([
+    prisma.membership.findFirst({
+      where: { id: membershipId, organizationId },
+    }),
+    prisma.department.findFirst({
+      where: { id: nextDepartmentId, organizationId, isActive: true },
+    }),
+  ]);
   if (!member) throw new AppError("NOT_FOUND", "구성원을 찾지 못했습니다.", 404);
   const nextRole = z
     .enum(["OWNER", "ADMIN", "MEMBER"])
     .parse(text(formData, "role"));
-  const nextDepartmentId = text(formData, "departmentId");
   if (member.role === "OWNER" && actor.role !== "OWNER") {
     throw new AppError("FORBIDDEN", "소유자의 정보는 소유자만 변경할 수 있습니다.", 403);
   }
   if (nextRole !== member.role && !roleCanManageRole(actor.role, member.role, nextRole)) {
     throw new AppError("FORBIDDEN", "역할을 변경할 권한이 없습니다.", 403);
   }
-  const department = await prisma.department.findFirst({
-    where: { id: nextDepartmentId, organizationId, isActive: true },
-  });
   if (!department) throw new AppError("VALIDATION_ERROR", "부서를 확인해 주세요.");
 
   if (member.role === "OWNER" && nextRole !== "OWNER") {
@@ -1280,15 +1302,6 @@ export async function deleteReportReferenceFileAction(formData: FormData) {
   ]);
   revalidatePath(`/org/${organizationId}/admin/settings`);
   revalidatePath(`/org/${organizationId}/report`);
-}
-
-export async function getJoinCode(organizationId: string) {
-  await requireMembership(organizationId, ["OWNER", "ADMIN"]);
-  const organization = await prisma.organization.findUniqueOrThrow({
-    where: { id: organizationId },
-    select: { joinCodeCiphertext: true },
-  });
-  return decryptJoinCode(organization.joinCodeCiphertext);
 }
 
 export async function markAllNotificationsReadAction(formData: FormData) {

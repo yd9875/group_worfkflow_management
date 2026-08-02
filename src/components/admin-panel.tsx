@@ -6,14 +6,13 @@ import {
   deleteOrganizationAction,
   deleteReportReferenceFileAction,
   deleteReportReferencePrincipleAction,
-  getJoinCode,
   rejectJoinRequestAction,
   rotateJoinCodeAction,
   updateDepartmentAction,
   updateMemberAction,
   uploadReportReferenceFileAction,
 } from "@/features/actions";
-import { getAdminData } from "@/features/queries";
+import { getAdminData, type AdminSection } from "@/features/queries";
 import { Building2, ClipboardCheck, FileText, FileUp, KeyRound, Paperclip, Trash2 } from "lucide-react";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { SubmitButton } from "@/components/submit-button";
@@ -125,7 +124,11 @@ export async function AdminPanel({
   organizationId: string;
   section: string;
 }) {
-  const data = await getAdminData(organizationId);
+  const normalizedSection: AdminSection =
+    section === "requests" || section === "departments" || section === "settings" || section === "audit-logs"
+      ? section
+      : "members";
+  const data = await getAdminData(organizationId, normalizedSection);
 
   if (section === "requests") {
     return (
@@ -202,7 +205,7 @@ export async function AdminPanel({
   }
 
   if (section === "settings") {
-    const joinCode = await getJoinCode(organizationId);
+    const joinCode = data.joinCode;
     return (
       <section>
         <p className="eyebrow">Organization settings</p><h1 className="page-title mt-1">조직 관리</h1>
