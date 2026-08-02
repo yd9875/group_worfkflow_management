@@ -94,7 +94,8 @@ textarea.field { min-height: 6rem; resize: vertical; }
 .week-head { position: sticky; top: 0; z-index: 5; min-height: 3.7rem; background: #f7f9f6; text-align: center; }
 .week-label { position: sticky; left: 0; z-index: 4; background: #fbfcfa; }
 .week-head.week-label { z-index: 6; }
-.day-grid { display: grid; min-width: 46rem; grid-template-columns: 8rem minmax(34rem, 1fr); }
+.day-grid { display: grid; min-width: 70rem; grid-template-columns: 8rem repeat(2, minmax(30rem, 1fr)); }
+.day-grid.day-grid-single { min-width: 46rem; grid-template-columns: 8rem minmax(34rem, 1fr); }
 .day-cell { min-height: 7rem; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: .75rem; }
 .day-head { position: sticky; top: 0; z-index: 5; min-height: 4rem; background: #f7f9f6; text-align: center; }
 .day-label { position: sticky; left: 0; z-index: 4; background: #fbfcfa; }
@@ -151,7 +152,8 @@ textarea.field { min-height: 6rem; resize: vertical; }
   .week-cell { min-height: 4.25rem; padding: .2rem; }
   .week-head { min-height: 2.8rem; }
   .week-label { font-size: .61rem; line-height: 1.2; }
-  .day-grid { min-width: 34rem; grid-template-columns: 5rem minmax(29rem, 1fr); }
+  .day-grid { min-width: 51rem; grid-template-columns: 5rem repeat(2, minmax(23rem, 1fr)); }
+  .day-grid.day-grid-single { min-width: 34rem; grid-template-columns: 5rem minmax(29rem, 1fr); }
   .day-cell { min-height: 5rem; padding: .5rem; }
   .day-head { min-height: 3rem; }
   .day-label { font-size: .7rem; line-height: 1.25; }

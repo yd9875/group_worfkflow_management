@@ -256,10 +256,10 @@ export async function AdminPanel({
               </div>
               <form action={uploadReportReferenceFileAction} className="mt-4 grid gap-3" encType="multipart/form-data">
                 <input type="hidden" name="organizationId" value={organizationId} />
-                <input className="field cursor-pointer transition hover:border-[var(--brand)] hover:bg-[var(--brand-soft)] hover:shadow-md file:mr-3 file:cursor-pointer file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:font-bold" name="referenceFiles" type="file" accept=".pdf,.txt,.md,.csv,.json,application/pdf,text/plain,text/markdown,text/csv,application/json" multiple required />
+                <input className="field cursor-pointer transition hover:border-[var(--brand)] hover:bg-[var(--brand-soft)] hover:shadow-md file:mr-3 file:cursor-pointer file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:font-bold" name="referenceFiles" type="file" accept=".pdf,.txt,.md,.csv,.json,.docx,.xlsx,.png,.jpg,.jpeg,.webp,application/pdf,text/plain,text/markdown,text/csv,application/json,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/png,image/jpeg,image/webp" multiple required />
                 <div className="flex flex-wrap items-center gap-3">
                   <SubmitButton className="btn btn-secondary" pendingLabel="첨부 중…"><FileUp size={16} /> 파일 첨부</SubmitButton>
-                  <span className="muted text-xs">여러 파일 선택 가능 · PDF, TXT, MD, CSV, JSON · 파일당 최대 20MB (양식 보존은 PDF 권장)</span>
+                  <span className="muted text-xs">여러 파일 선택 가능 · PDF, TXT, MD, CSV, JSON, Word(DOCX), Excel(XLSX), PNG/JPG/WebP · 파일당 최대 20MB</span>
                 </div>
               </form>
             </div>

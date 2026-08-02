@@ -35,6 +35,12 @@ const REPORT_REFERENCE_MIME_BY_EXTENSION: Record<string, string> = {
   md: "text/markdown",
   csv: "text/csv",
   json: "application/json",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  webp: "image/webp",
 };
 
 function text(formData: FormData, key: string) {
@@ -1259,7 +1265,7 @@ export async function uploadReportReferenceFileAction(formData: FormData) {
     }
     const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
     const mimeType = REPORT_REFERENCE_MIME_BY_EXTENSION[extension];
-    if (!mimeType) throw new AppError("VALIDATION_ERROR", `${file.name}: PDF, TXT, MD, CSV, JSON 파일만 첨부할 수 있습니다.`);
+    if (!mimeType) throw new AppError("VALIDATION_ERROR", `${file.name}: PDF, TXT, MD, CSV, JSON, DOCX, XLSX, PNG, JPG, WebP 파일만 첨부할 수 있습니다.`);
     const objectKey = `report-references/${organizationId}/${randomUUID()}.${extension}`;
     return { file, mimeType, objectKey, data: Buffer.from(await file.arrayBuffer()) };
   }));

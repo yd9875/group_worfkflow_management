@@ -142,9 +142,9 @@ export function MonthBoard({ organizationId, days, currentMonth, schedules }: { 
   );
 }
 
-export function DayBoard({ organizationId, day, departments, schedules }: {
+export function DayBoard({ organizationId, days, departments, schedules }: {
   organizationId: string;
-  day: Date;
+  days: Date[];
   departments: Array<{ id: string; name: string; isSystem: boolean }>;
   schedules: ScheduleItem[];
 }) {
@@ -157,15 +157,18 @@ export function DayBoard({ organizationId, day, departments, schedules }: {
 
   return (
     <div className="schedule-scroll" aria-label="일일 계획표">
-      <div className="day-grid">
+      <div className={`day-grid ${days.length === 1 ? "day-grid-single" : ""}`}>
         <div className="day-cell day-head day-label grid place-items-center font-extrabold">구분</div>
-        <div className={`day-cell day-head flex items-center justify-center gap-3 ${isToday(day) ? "today" : ""}`}><span className="text-lg font-extrabold">{format(day, "M.d")}</span><span className="muted text-sm font-bold">{format(day, "EEEE", { locale: ko })}</span></div>
+        {days.map((day) => (
+          <div key={day.toISOString()} className={`day-cell day-head flex items-center justify-center gap-3 ${isToday(day) ? "today" : ""}`}><span className="text-lg font-extrabold">{format(day, "M.d")}</span><span className="muted text-sm font-bold">{format(day, "EEEE", { locale: ko })}</span></div>
+        ))}
         {rows.map((row) => {
-          const items = schedules.filter((schedule) => belongsToRow(schedule, row) && occursOnDay(schedule, day));
           return (
             <div className="contents" key={row.id}>
               <div className="day-cell day-label flex items-start pt-5 font-bold">{row.label}</div>
-              <div className={`day-cell grid gap-3 ${isToday(day) ? "today" : ""}`}>
+              {days.map((day) => {
+                const items = schedules.filter((schedule) => belongsToRow(schedule, row) && occursOnDay(schedule, day));
+                return <div key={`${row.id}-${day.toISOString()}`} className={`day-cell grid content-start gap-3 ${isToday(day) ? "today" : ""}`}>
                 {row.kind === "leave" ? items.map((schedule) => (
                   <Item key={schedule.id} schedule={schedule} organizationId={organizationId} rowKind="leave" />
                 )) : items.map((schedule) => (
@@ -195,7 +198,8 @@ export function DayBoard({ organizationId, day, departments, schedules }: {
                   </article>
                 ))}
                 {!items.length && <p className="muted py-5 text-center text-sm">등록된 항목이 없습니다.</p>}
-              </div>
+                </div>;
+              })}
             </div>
           );
         })}

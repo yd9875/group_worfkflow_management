@@ -1,5 +1,5 @@
 import type { Prisma, ScheduleCategory } from "@prisma/client";
-import { endOfDay, endOfMonth, endOfWeek, startOfDay, startOfMonth, startOfWeek } from "date-fns";
+import { addDays, endOfDay, endOfMonth, endOfWeek, startOfDay, startOfMonth, startOfWeek } from "date-fns";
 import { cache } from "react";
 import { prisma } from "@/lib/db";
 import { decryptJoinCode } from "@/lib/join-code";
@@ -78,6 +78,7 @@ export async function listSchedules(input: {
   categories?: string[];
   departmentId?: string;
   memberId?: string;
+  dayCount?: number;
 }) {
   const membership = await requireMembership(input.organizationId);
   const rangeStart =
@@ -88,7 +89,7 @@ export async function listSchedules(input: {
       : startOfWeek(startOfMonth(input.date), { weekStartsOn: 1 });
   const rangeEnd =
     input.view === "day"
-      ? endOfDay(input.date)
+      ? endOfDay(addDays(input.date, Math.max(1, Math.min(input.dayCount ?? 1, 7)) - 1))
       : input.view === "week"
       ? endOfWeek(input.date, { weekStartsOn: 1 })
       : endOfWeek(endOfMonth(input.date), { weekStartsOn: 1 });

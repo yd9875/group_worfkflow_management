@@ -55,6 +55,7 @@ export async function SchedulePage({ organizationId, view, search }: { organizat
       categories: selectedCategories,
       departmentId: department,
       memberId: member,
+      dayCount: view === "day" ? 2 : undefined,
     }),
   ]);
   const weekStart = startOfWeek(selectedDate, { weekStartsOn: 1 });
@@ -132,7 +133,7 @@ export async function SchedulePage({ organizationId, view, search }: { organizat
       </form>
 
       {view === "day" ? (
-        <DayBoard organizationId={organizationId} day={selectedDate} departments={context.departments.map(({ id, name, isSystem }) => ({ id, name, isSystem }))} schedules={serialized} />
+        <DayBoard organizationId={organizationId} days={[selectedDate, addDays(selectedDate, 1)]} departments={context.departments.map(({ id, name, isSystem }) => ({ id, name, isSystem }))} schedules={serialized} />
       ) : view === "week" ? (
         <WeekBoard organizationId={organizationId} days={weekDays} departments={context.departments.map(({ id, name, isSystem }) => ({ id, name, isSystem }))} schedules={serialized} />
       ) : (

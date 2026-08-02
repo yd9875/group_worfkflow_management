@@ -7,6 +7,12 @@ import { prisma } from "@/lib/db";
 import { createReportFile, safeReportFileName } from "@/lib/report-file";
 import { REPORT_FORMATS } from "@/lib/report-formats";
 import { deleteR2Object, getR2Object, putR2Object } from "@/lib/r2";
+import {
+  extractReportReferenceText,
+  isNativeVisualReference,
+  isReferenceImage,
+  type ReportReferenceFile,
+} from "@/lib/report-reference";
 
 export const runtime = "nodejs";
 
@@ -23,14 +29,7 @@ const inputSchema = z.object({
   { message: "선택한 AI 제공사에서 지원하지 않는 모델입니다.", path: ["model"] },
 );
 
-type ReferenceFile = {
-  fileName: string;
-  mimeType: string;
-  size: number;
-  data: Uint8Array;
-};
-
-type ReferenceFiles = ReferenceFile[];
+type ReferenceFiles = ReportReferenceFile[];
 
 type ProviderResult = {
   report?: string;
@@ -42,26 +41,13 @@ const SYSTEM_INSTRUCTIONS = [
   "당신은 한국어 조직 일정 보고서 작성자입니다.",
   "제공된 일정 데이터만 사실 근거로 사용하고, 없는 사실이나 수치를 만들지 마세요.",
   "첨부된 레퍼런스 파일이 있으면 그 파일의 제목 구성, 섹션 순서, 문체, 서술 방식과 시각적 계층을 우선적으로 모방하세요.",
+  "Word 문서의 제목·문단·표 구조, Excel 통합 문서의 시트·행·열 구성, 이미지와 PDF의 배치·색상·표·시각적 계층을 보고서 양식으로 분석해 반영하세요.",
   "레퍼런스 파일의 실제 사실이나 수치를 이번 보고서 내용으로 복사하지 마세요.",
   "별도 레퍼런스 양식이 없으면 핵심 요약, 완료 현황, 중요 일정, 리스크 및 확인 필요 사항, 다음 기간 권고 순서로 간결하고 실무적인 보고서를 작성하세요.",
   "마크다운 표는 사용하지 말고 제목과 불릿을 사용하세요.",
 ].join(" ");
 
-function referenceText(referenceFiles: ReferenceFiles) {
-  const limit = 200_000;
-  let remaining = limit;
-  const chunks: string[] = [];
-  for (const referenceFile of referenceFiles.filter((file) => file.mimeType !== "application/pdf")) {
-    if (remaining <= 0) break;
-    const text = Buffer.from(referenceFile.data).toString("utf8");
-    const included = text.slice(0, remaining);
-    chunks.push(`[${referenceFile.fileName}]\n${included}${included.length < text.length ? "\n[파일 내용 일부 생략]" : ""}`);
-    remaining -= included.length;
-  }
-  return chunks.join("\n\n");
-}
-
-function buildPrompt(input: {
+async function buildPrompt(input: {
   organizationName: string;
   view: "day" | "week" | "month";
   date: string;
@@ -69,7 +55,7 @@ function buildPrompt(input: {
   scheduleData: unknown[];
   referenceFiles: ReferenceFiles;
 }) {
-  const textFile = referenceText(input.referenceFiles);
+  const textFile = await extractReportReferenceText(input.referenceFiles);
   return [
     "다음 데이터로 보고서를 작성하세요.",
     JSON.stringify({
@@ -83,7 +69,7 @@ function buildPrompt(input: {
   ].filter(Boolean).join("\n");
 }
 
-function referenceBase64(referenceFile: ReferenceFile) {
+function referenceBase64(referenceFile: ReportReferenceFile) {
   return Buffer.from(referenceFile.data).toString("base64");
 }
 
@@ -96,6 +82,11 @@ async function callOpenAI(apiKey: string, model: string, prompt: string, referen
       file_data: `data:application/pdf;base64,${referenceBase64(referenceFile)}`,
       detail: "high",
     }));
+  content.push(...referenceFiles.filter(isReferenceImage).map((referenceFile) => ({
+    type: "input_image",
+    image_url: `data:${referenceFile.mimeType};base64,${referenceBase64(referenceFile)}`,
+    detail: "high",
+  })));
   content.push({ type: "input_text", text: prompt });
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
@@ -131,6 +122,10 @@ async function callAnthropic(apiKey: string, model: string, prompt: string, refe
       type: "document",
       source: { type: "base64", media_type: "application/pdf", data: referenceBase64(referenceFile) },
     }));
+  content.push(...referenceFiles.filter(isReferenceImage).map((referenceFile) => ({
+    type: "image",
+    source: { type: "base64", media_type: referenceFile.mimeType, data: referenceBase64(referenceFile) },
+  })));
   content.push({ type: "text", text: prompt });
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -156,8 +151,8 @@ async function callAnthropic(apiKey: string, model: string, prompt: string, refe
 
 async function callGemini(apiKey: string, model: string, prompt: string, referenceFiles: ReferenceFiles): Promise<ProviderResult> {
   const parts: Array<Record<string, unknown>> = referenceFiles
-    .filter((file) => file.mimeType === "application/pdf")
-    .map((referenceFile) => ({ inline_data: { mime_type: "application/pdf", data: referenceBase64(referenceFile) } }));
+    .filter(isNativeVisualReference)
+    .map((referenceFile) => ({ inline_data: { mime_type: referenceFile.mimeType, data: referenceBase64(referenceFile) } }));
   parts.push({ text: prompt });
   const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
     method: "POST",
@@ -212,7 +207,7 @@ export async function POST(request: Request) {
       size: file.size,
       data: await getR2Object(file.objectKey),
     })));
-    const prompt = buildPrompt({
+    const prompt = await buildPrompt({
       organizationName: organization.name,
       view: input.view,
       date: input.date,

@@ -57,6 +57,7 @@ export default async function PrintPage({
       categories: many(search.category),
       departmentId: one(search.department),
       memberId: one(search.member),
+      dayCount: view === "day" ? 2 : undefined,
     }),
   ]);
   const profileNames = new Map(
@@ -74,7 +75,7 @@ export default async function PrintPage({
       : null,
   }));
   const periodLabel = view === "day"
-    ? format(selectedDate, "yyyy년 M월 d일 EEEE", { locale: ko })
+    ? `${format(selectedDate, "yyyy년 M월 d일 EEEE", { locale: ko })} – ${format(addDays(selectedDate, 1), "M월 d일 EEEE", { locale: ko })}`
     : view === "week"
       ? `${format(weekStart, "yyyy.MM.dd")} – ${format(addDays(weekStart, 6), "yyyy.MM.dd")}`
       : format(selectedDate, "yyyy년 M월", { locale: ko });
@@ -95,7 +96,7 @@ export default async function PrintPage({
         </div>
       </header>
       {view === "day" ? (
-        <DayBoard organizationId={organizationId} day={selectedDate} departments={departments} schedules={items} />
+        <DayBoard organizationId={organizationId} days={[selectedDate, addDays(selectedDate, 1)]} departments={departments} schedules={items} />
       ) : view === "week" ? (
         <WeekBoard organizationId={organizationId} days={weekDays} departments={departments} schedules={items} />
       ) : (
