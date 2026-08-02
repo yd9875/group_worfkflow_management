@@ -95,7 +95,10 @@ function Item({
       </summary>
       <div className="mt-2 whitespace-normal rounded-md bg-white/80 p-2 text-xs leading-5 shadow-sm">
         <p className="font-extrabold">{schedule.title}</p>
-        <p className="mt-1 text-slate-500">{categoryLabel[schedule.category] ?? schedule.category} · {schedule.isAllDay ? "종일" : `${format(schedule.startsAt, "HH:mm")}–${format(schedule.endsAt, "HH:mm")}`}</p>
+        <p className="mt-1 text-slate-500">
+          {categoryLabel[schedule.category] ?? schedule.category}
+          {schedule.category !== "LEAVE" && <> · {schedule.isAllDay ? "종일" : `${format(schedule.startsAt, "HH:mm")}–${format(schedule.endsAt, "HH:mm")}`}</>}
+        </p>
         {schedule.description && <p className="mt-2">{schedule.description}</p>}
         {schedule.scope !== "PERSONAL" && schedule.memo && <p className="mt-2 flex items-start gap-1 text-slate-600"><StickyNote className="mt-0.5 shrink-0" size={12} /> {schedule.memo}</p>}
         <p className="mt-2 text-slate-500">등록: {schedule.creatorProfileName || "알 수 없음"}</p>

@@ -378,16 +378,29 @@ function personalEntryInput(formData: FormData) {
   const category = text(formData, "category");
   const isLeave = itemType === "SCHEDULE" && category === "LEAVE";
   const returnDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(text(formData, "returnDate"));
-  const taskStartsAt = new Date(`${returnDate}T00:00:00+09:00`);
-  const taskEndsAt = new Date(taskStartsAt.getTime() + 24 * 60 * 60 * 1000);
+  let startsAt: Date | string;
+  let endsAt: Date | string;
+  if (itemType === "TASK") {
+    const taskDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(text(formData, "taskDate") || returnDate);
+    startsAt = new Date(`${taskDate}T00:00:00+09:00`);
+    endsAt = new Date(startsAt.getTime() + 24 * 60 * 60 * 1000);
+  } else if (isLeave) {
+    const leaveStartsOn = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(text(formData, "leaveStartsOn") || returnDate);
+    const leaveEndsOn = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(text(formData, "leaveEndsOn") || leaveStartsOn);
+    startsAt = new Date(`${leaveStartsOn}T00:00:00+09:00`);
+    endsAt = new Date(new Date(`${leaveEndsOn}T00:00:00+09:00`).getTime() + 24 * 60 * 60 * 1000);
+  } else {
+    startsAt = text(formData, "startsAt");
+    endsAt = text(formData, "endsAt");
+  }
   return personalEntrySchema.parse({
     itemType,
     title: text(formData, "title"),
     description: text(formData, "description") || undefined,
     memo: text(formData, "memo") || undefined,
-    departmentId: text(formData, "departmentId") || null,
-    startsAt: itemType === "TASK" || isLeave ? taskStartsAt : text(formData, "startsAt"),
-    endsAt: itemType === "TASK" || isLeave ? taskEndsAt : text(formData, "endsAt"),
+    departmentId: isLeave ? null : text(formData, "departmentId") || null,
+    startsAt,
+    endsAt,
     category,
     isAllDay: itemType === "TASK" || isLeave || formData.get("isAllDay") === "on",
     isImportant: !isLeave && formData.get("isImportant") === "on",

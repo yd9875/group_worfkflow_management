@@ -16,6 +16,28 @@ const categoryOptions = [
   ["LEAVE", "휴가"],
 ] as const;
 
+function formatDateInput(value: Date) {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function shiftDateInput(value: string, days: number) {
+  const date = new Date(`${value}T12:00:00`);
+  date.setDate(date.getDate() + days);
+  return formatDateInput(date);
+}
+
+function addHoursToDateTimeInput(value: string, hours: number) {
+  const start = new Date(value);
+  if (Number.isNaN(start.getTime())) return value;
+  const end = new Date(start.getTime() + hours * 60 * 60 * 1000);
+  const hour = String(end.getHours()).padStart(2, "0");
+  const minute = String(end.getMinutes()).padStart(2, "0");
+  return `${formatDateInput(end)}T${hour}:${minute}`;
+}
+
 export type PersonalEntryFormItem = {
   id: string;
   category: string;
@@ -50,6 +72,14 @@ export function PersonalEntryForm({
   const editing = Boolean(item);
   const isTask = itemType === "TASK";
   const [category, setCategory] = useState(item?.category ?? "GENERAL");
+  const itemDate = item?.startsAt.slice(0, 10) ?? date;
+  const [taskDate, setTaskDate] = useState(itemDate);
+  const [startsAt, setStartsAt] = useState(item && item.category !== "LEAVE" ? item.startsAt : `${date}T09:00`);
+  const [endsAt, setEndsAt] = useState(item && item.category !== "LEAVE" ? item.endsAt : `${date}T10:00`);
+  const [leaveStartsOn, setLeaveStartsOn] = useState(itemDate);
+  const [leaveEndsOn, setLeaveEndsOn] = useState(
+    item?.category === "LEAVE" ? shiftDateInput(item.endsAt.slice(0, 10), -1) : itemDate,
+  );
   const isLeave = !isTask && category === "LEAVE";
   const formAction = item ? updateScheduleAction : createPersonalEntryAction;
 
@@ -63,18 +93,34 @@ export function PersonalEntryForm({
         <Link className="btn btn-quiet min-h-8 px-2 py-1 text-xs" href={closeHref}>닫기</Link>
       </div>
       <input type="hidden" name="organizationId" value={organizationId} />
-      <input type="hidden" name="returnDate" value={date} />
+      <input type="hidden" name="returnDate" value={isTask ? taskDate : date} />
       <input type="hidden" name="itemType" value={itemType} />
       {item && <input type="hidden" name="scheduleId" value={item.id} />}
       {isTask && <input type="hidden" name="category" value="GENERAL" />}
 
       <div className="mt-4 grid gap-4">
         {!isTask && (
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className={`grid gap-4 ${isLeave ? "" : "sm:grid-cols-2"}`}>
             <label className="label">유형
               <select className="field" name="category" value={category} onChange={(event) => setCategory(event.target.value)}>
                 {categoryOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
               </select>
+            </label>
+            {!isLeave && <label className="label">표시 위치
+              <select className="field" name="departmentId" defaultValue={item?.departmentId ?? ""}>
+                <option value="">공통사항</option>
+                {!department.isSystem && <option value={department.id}>{department.name}</option>}
+              </select>
+            </label>}
+          </div>
+        )}
+
+        <label className="label">제목<input className="field" name="title" defaultValue={item?.title ?? ""} maxLength={100} required /></label>
+
+        {isTask && (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="label">날짜
+              <input className="field" name="taskDate" type="date" value={taskDate} onChange={(event) => setTaskDate(event.target.value)} required />
             </label>
             <label className="label">표시 위치
               <select className="field" name="departmentId" defaultValue={item?.departmentId ?? ""}>
@@ -85,12 +131,30 @@ export function PersonalEntryForm({
           </div>
         )}
 
-        <label className="label">제목<input className="field" name="title" defaultValue={item?.title ?? ""} maxLength={100} required /></label>
+        {isLeave && (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="label">시작일자
+              <input className="field" name="leaveStartsOn" type="date" value={leaveStartsOn} onChange={(event) => setLeaveStartsOn(event.target.value)} required />
+            </label>
+            <label className="label">종료일자
+              <input className="field" name="leaveEndsOn" type="date" min={leaveStartsOn} value={leaveEndsOn} onChange={(event) => setLeaveEndsOn(event.target.value)} required />
+            </label>
+          </div>
+        )}
 
         {!isTask && !isLeave && (
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="label">시작 일시<input className="field" name="startsAt" type="datetime-local" defaultValue={item?.startsAt ?? `${date}T09:00`} required /></label>
-            <label className="label">종료 일시<input className="field" name="endsAt" type="datetime-local" defaultValue={item?.endsAt ?? `${date}T10:00`} required /></label>
+          <div className="grid items-start gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+            <div className="label">
+              <span>시작 일시</span>
+              <input className="field" name="startsAt" type="datetime-local" value={startsAt} onChange={(event) => setStartsAt(event.target.value)} required />
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {[1, 2, 3, 4].map((hours) => (
+                  <button className="btn btn-quiet min-h-8 px-2 py-1 text-xs" key={hours} type="button" onClick={() => setEndsAt(addHoursToDateTimeInput(startsAt, hours))}>+{hours}시간</button>
+                ))}
+              </div>
+            </div>
+            <label className="label">종료 일시<input className="field" name="endsAt" type="datetime-local" value={endsAt} onChange={(event) => setEndsAt(event.target.value)} required /></label>
+            <label className="flex items-center gap-2 whitespace-nowrap text-sm font-bold sm:mt-8"><input className="size-4 accent-[var(--brand)]" type="checkbox" name="isAllDay" defaultChecked={item?.isAllDay ?? false} /> 종일</label>
           </div>
         )}
 
@@ -101,7 +165,6 @@ export function PersonalEntryForm({
           <div className="flex flex-wrap gap-x-6 gap-y-3 rounded-xl bg-white/80 p-4 text-sm">
             <label className="flex items-center gap-2"><input className="size-4 accent-[var(--accent)]" type="checkbox" name="isImportant" defaultChecked={item?.isImportant ?? false} /> 중요 {isTask ? "업무" : "일정"}</label>
             <label className="flex items-center gap-2"><input className="size-4 accent-[var(--brand)]" type="checkbox" name="showInSchedule" defaultChecked={item ? item.showInWeek || item.showInMonth : true} /> 일정표 표시</label>
-            {!isTask && <label className="flex items-center gap-2"><input className="size-4 accent-[var(--brand)]" type="checkbox" name="isAllDay" defaultChecked={item?.isAllDay ?? false} /> 종일</label>}
             {isTask && <label className="flex items-center gap-2"><input className="size-4 accent-[var(--brand)]" type="checkbox" name="isCompleted" defaultChecked={item?.isCompleted ?? false} /> 업무 완료</label>}
             {!isTask && <input type="hidden" name="isCompleted" value="off" />}
           </div>
