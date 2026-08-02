@@ -215,6 +215,8 @@ export async function getReportData(
       select: {
         name: true,
         reportReference: true,
+        reportTemplateSchema: true,
+        reportTemplateFingerprint: true,
         reportReferencePrinciples: {
           select: { id: true, content: true },
           orderBy: { createdAt: "asc" },

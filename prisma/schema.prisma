@@ -135,6 +135,9 @@ model Organization {
   createdAt                 DateTime                   @default(now())
   updatedAt                 DateTime                   @updatedAt
   reportReference           String?
+  reportTemplateSchema      Json?
+  reportTemplateFingerprint String?
+  reportTemplateUpdatedAt   DateTime?
   memberships               Membership[]
   departments               Department[]
   joinRequests              JoinRequest[]
