@@ -1,9 +1,12 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getReportData } from "@/features/queries";
 import { type AiProvider, getAiProvider } from "@/lib/ai-browser-settings";
-import { getR2Object } from "@/lib/r2";
+import { prisma } from "@/lib/db";
+import { createReportFile, safeReportFileName } from "@/lib/report-file";
+import { REPORT_FORMATS } from "@/lib/report-formats";
+import { deleteR2Object, getR2Object, putR2Object } from "@/lib/r2";
 
 export const runtime = "nodejs";
 
@@ -14,6 +17,7 @@ const inputSchema = z.object({
   provider: z.enum(["OPENAI", "ANTHROPIC", "GEMINI"]),
   apiKey: z.string().trim().min(20).max(500),
   model: z.string().trim().min(1).max(100),
+  format: z.enum(REPORT_FORMATS),
 }).refine(
   (input) => getAiProvider(input.provider).models.some((model) => model.value === input.model),
   { message: "선택한 AI 제공사에서 지원하지 않는 모델입니다.", path: ["model"] },
@@ -227,9 +231,49 @@ export async function POST(request: Request) {
       );
     }
     if (!result.report) return NextResponse.json({ error: `${getAiProvider(input.provider).label} 응답에서 보고서 내용을 읽지 못했습니다.` }, { status: 502 });
-    return NextResponse.json({ report: result.report });
+    const viewLabel = input.view === "day" ? "일일" : input.view === "week" ? "주간" : "월간";
+    const title = `${organization.name} ${viewLabel} AI 보고서`;
+    const subtitle = `${input.date} 기준 · ${getAiProvider(input.provider).label} ${input.model}`;
+    const file = await createReportFile({ format: input.format, title, subtitle, report: result.report });
+    const reportId = randomUUID();
+    const baseName = safeReportFileName(`${organization.name}_${viewLabel}_AI보고서_${input.date}`);
+    const fileName = `${baseName}.${file.extension}`;
+    const objectKey = `generated-reports/${input.organizationId}/${reportId}.${file.extension}`;
+    await putR2Object({ key: objectKey, body: file.body, contentType: file.mimeType });
+    try {
+      const generatedReport = await prisma.generatedReport.create({
+        data: {
+          id: reportId,
+          organizationId: input.organizationId,
+          createdByUserId: membership.userId,
+          view: input.view,
+          referenceDate: new Date(`${input.date}T00:00:00.000Z`),
+          format: input.format,
+          fileName,
+          mimeType: file.mimeType,
+          size: file.body.byteLength,
+          objectKey,
+        },
+        select: {
+          id: true,
+          view: true,
+          referenceDate: true,
+          format: true,
+          fileName: true,
+          mimeType: true,
+          size: true,
+          createdAt: true,
+          createdBy: { select: { name: true } },
+        },
+      });
+      return NextResponse.json({ report: generatedReport });
+    } catch (error) {
+      await deleteR2Object(objectKey).catch(() => undefined);
+      throw error;
+    }
   } catch (error) {
     if (error instanceof z.ZodError) return NextResponse.json({ error: error.issues[0]?.message || "보고서 요청 정보가 올바르지 않습니다." }, { status: 400 });
+    console.error("AI report generation failed", error);
     return NextResponse.json({ error: "AI 보고서를 생성하지 못했습니다." }, { status: 500 });
   }
 }

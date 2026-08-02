@@ -819,11 +819,17 @@ export async function deleteOrganizationAction(formData: FormData) {
     throw new AppError("VALIDATION_ERROR", "조직 이름을 정확히 입력해 주세요.");
   }
 
-  const referenceFiles = await prisma.reportReferenceFile.findMany({
-    where: { organizationId },
-    select: { objectKey: true },
-  });
-  await deleteR2Objects(referenceFiles.map((file) => file.objectKey));
+  const [referenceFiles, generatedReports] = await Promise.all([
+    prisma.reportReferenceFile.findMany({
+      where: { organizationId },
+      select: { objectKey: true },
+    }),
+    prisma.generatedReport.findMany({
+      where: { organizationId },
+      select: { objectKey: true },
+    }),
+  ]);
+  await deleteR2Objects([...referenceFiles, ...generatedReports].map((file) => file.objectKey));
 
   await prisma.$transaction(async (tx) => {
     await tx.userPreference.updateMany({

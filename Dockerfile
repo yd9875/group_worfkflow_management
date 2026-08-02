@@ -25,7 +25,10 @@ ENV NODE_ENV=production \
     HOSTNAME=0.0.0.0 \
     PORT=3000
 WORKDIR /app
-RUN groupadd --system --gid 1001 nodejs && useradd --system --uid 1001 nextjs
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends fonts-nanum openssl && \
+    rm -rf /var/lib/apt/lists/* && \
+    groupadd --system --gid 1001 nodejs && useradd --system --uid 1001 nextjs
 COPY --from=build --chown=nextjs:nodejs /app/node_modules ./node_modules
 COPY --from=build --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=build --chown=nextjs:nodejs /app/.next/static ./.next/static

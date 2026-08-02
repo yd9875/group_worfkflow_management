@@ -72,6 +72,7 @@ model User {
   preference           UserPreference?
   reviewedJoinRequests JoinRequest[]       @relation("JoinRequestReviewer")
   personalDailyMemos   PersonalDailyMemo[]
+  generatedReports    GeneratedReport[]
 
   @@map("users")
 }
@@ -143,6 +144,7 @@ model Organization {
   reportReferenceFiles      ReportReferenceFile[]
   reportReferencePrinciples ReportReferencePrinciple[]
   personalDailyMemos        PersonalDailyMemo[]
+  generatedReports          GeneratedReport[]
 
   @@map("organizations")
 }
@@ -187,6 +189,25 @@ model ReportReferenceFile {
 
   @@index([organizationId, createdAt])
   @@map("report_reference_files")
+}
+
+model GeneratedReport {
+  id              String       @id @default(uuid())
+  organizationId  String
+  createdByUserId String?
+  view            String
+  referenceDate   DateTime     @db.Date
+  format          String
+  fileName        String
+  mimeType        String
+  size            Int
+  objectKey       String       @unique
+  createdAt       DateTime     @default(now())
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy       User?        @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt(sort: Desc)])
+  @@map("generated_reports")
 }
 
 model Department {

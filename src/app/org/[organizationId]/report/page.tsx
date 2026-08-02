@@ -3,7 +3,6 @@ import { format } from "date-fns";
 import { ko } from "date-fns/locale";
 import { ArrowLeft, CheckCircle2, Flag, Sparkles } from "lucide-react";
 import { getReportData } from "@/features/queries";
-import { PrintButton } from "@/components/print-button";
 import { AiReportGenerator } from "@/components/ai-report-generator";
 
 const categoryLabel: Record<string, string> = {
@@ -18,7 +17,7 @@ export default async function ReportPage({ params, searchParams }: {
   const [{ organizationId }, search] = await Promise.all([params, searchParams]);
   const view = search.view === "day" || search.view === "month" ? search.view : "week";
   const date = search.date && /^\d{4}-\d{2}-\d{2}$/.test(search.date) ? new Date(`${search.date}T12:00:00`) : new Date();
-  const { schedules, organization } = await getReportData(organizationId, date, view);
+  const { schedules, organization, generatedReports } = await getReportData(organizationId, date, view);
   const tasks = schedules.filter((item) => item.itemType === "TASK");
   const completed = tasks.filter((item) => item.isCompleted);
   const important = schedules.filter((item) => item.isImportant);
@@ -34,10 +33,25 @@ export default async function ReportPage({ params, searchParams }: {
     <article className="mx-auto max-w-5xl">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div><p className="eyebrow flex items-center gap-2"><Sparkles size={15} /> AI report draft</p><h1 className="page-title mt-1">{organization.name} {viewLabel} 보고서</h1><p className="muted mt-2">{format(date, "yyyy년 M월 d일", { locale: ko })} 기준 · 등록 일정과 조직 레퍼런스를 바탕으로 생성한 초안</p></div>
-        <div className="no-print flex gap-2"><Link className="btn btn-secondary" href={`/org/${organizationId}/schedule/${view}?date=${dateValue}`}><ArrowLeft size={17} /> 일정표</Link><PrintButton /></div>
+        <div className="no-print flex gap-2"><Link className="btn btn-secondary" href={`/org/${organizationId}/schedule/${view}?date=${dateValue}`}><ArrowLeft size={17} /> 일정표</Link></div>
       </header>
 
-      <AiReportGenerator organizationId={organizationId} date={dateValue} view={view} />
+      <AiReportGenerator
+        organizationId={organizationId}
+        date={dateValue}
+        view={view}
+        initialReports={generatedReports.map((report) => ({
+          id: report.id,
+          view: report.view,
+          referenceDate: format(report.referenceDate, "yyyy-MM-dd"),
+          format: report.format,
+          fileName: report.fileName,
+          mimeType: report.mimeType,
+          size: report.size,
+          createdAt: report.createdAt.toISOString(),
+          createdByName: report.createdBy?.name ?? null,
+        }))}
+      />
 
       <section className="mt-6 grid gap-4 sm:grid-cols-3">
         <div className="card p-5"><p className="muted text-sm">전체 항목</p><p className="mt-2 text-3xl font-extrabold">{schedules.length}</p></div>

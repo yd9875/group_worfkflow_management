@@ -207,7 +207,7 @@ export async function getReportData(
   view: "day" | "week" | "month",
 ) {
   const membership = await requireMembership(organizationId, ["OWNER", "ADMIN"]);
-  const [schedules, organization] = await Promise.all([
+  const [schedules, organization, generatedReports] = await Promise.all([
     listSchedules({ organizationId, date, view }),
     prisma.organization.findUniqueOrThrow({
       where: { id: organizationId },
@@ -224,8 +224,24 @@ export async function getReportData(
         },
       },
     }),
+    prisma.generatedReport.findMany({
+      where: { organizationId },
+      select: {
+        id: true,
+        view: true,
+        referenceDate: true,
+        format: true,
+        fileName: true,
+        mimeType: true,
+        size: true,
+        createdAt: true,
+        createdBy: { select: { name: true } },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    }),
   ]);
-  return { membership, schedules, organization };
+  return { membership, schedules, organization, generatedReports };
 }
 
 export async function listNotifications(organizationId: string) {
