@@ -97,7 +97,7 @@ function Item({
         <p className="font-extrabold">{schedule.title}</p>
         <p className="mt-1 text-slate-500">
           {categoryLabel[schedule.category] ?? schedule.category}
-          {schedule.category !== "LEAVE" && <> · {schedule.isAllDay ? "종일" : `${format(schedule.startsAt, "HH:mm")}–${format(schedule.endsAt, "HH:mm")}`}</>}
+          {schedule.category !== "LEAVE" && schedule.itemType !== "TASK" && <> · {schedule.isAllDay ? "종일" : `${format(schedule.startsAt, "HH:mm")}–${format(schedule.endsAt, "HH:mm")}`}</>}
         </p>
         {schedule.description && <p className="mt-2">{schedule.description}</p>}
         {schedule.scope !== "PERSONAL" && schedule.memo && <p className="mt-2 flex items-start gap-1 text-slate-600"><StickyNote className="mt-0.5 shrink-0" size={12} /> {schedule.memo}</p>}
@@ -175,7 +175,10 @@ export function DayBoard({ organizationId, day, departments, schedules }: {
                         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                           <span className="badge badge-green">{schedule.itemType === "TASK" ? "업무" : categoryLabel[schedule.category] ?? schedule.category}</span>
                           <h2 className={`text-lg font-extrabold ${schedule.isCompleted ? "line-through" : ""}`}>{schedule.title}</h2>
-                          <span className="muted flex flex-wrap items-center gap-2 text-sm"><Clock3 size={15} /> {schedule.isAllDay ? "종일" : `${format(schedule.startsAt, "HH:mm")} – ${format(schedule.endsAt, "HH:mm")}`}<span>·</span><span>{schedule.targetUserName || schedule.creatorProfileName || "담당자 없음"}</span></span>
+                          <span className="muted flex flex-wrap items-center gap-2 text-sm">
+                            {schedule.itemType !== "TASK" && <><Clock3 size={15} /> {schedule.isAllDay ? "종일" : `${format(schedule.startsAt, "HH:mm")} – ${format(schedule.endsAt, "HH:mm")}`}<span>·</span></>}
+                            <span>{schedule.targetUserName || schedule.creatorProfileName || "담당자 없음"}</span>
+                          </span>
                           {schedule.departmentName && <span className="badge badge-gray">{schedule.departmentName}</span>}
                           {schedule.isImportant && <span className="badge badge-orange"><Flag size={12} /> 중요</span>}
                           {schedule.isCompleted && <span className="badge badge-green"><CheckCircle2 size={12} /> 완료</span>}
