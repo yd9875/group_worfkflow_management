@@ -1,7 +1,5 @@
-import { existsSync } from "node:fs";
 import { AlignmentType, Document, HeadingLevel, Packer, Paragraph, ShadingType, Table, TableCell, TableRow, TextRun, WidthType } from "docx";
 import ExcelJS from "exceljs";
-import PDFDocument from "pdfkit";
 import PptxGenJS from "pptxgenjs";
 import type { ReportFormat } from "@/lib/report-formats";
 import type { ReportDocument, ReportTemplateProfile } from "@/lib/report-schema";
@@ -12,7 +10,6 @@ const formatInfo: Record<ReportFormat, { mimeType: string; label: string }> = {
   csv: { mimeType: "text/csv; charset=utf-8", label: "CSV" },
   xlsx: { mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", label: "XLSX" },
   pptx: { mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation", label: "PPTX" },
-  pdf: { mimeType: "application/pdf", label: "PDF" },
 };
 
 type ReportFileInput = {
@@ -273,61 +270,12 @@ async function createPptx(input: ReportFileInput) {
   return new Uint8Array(output as ArrayBuffer);
 }
 
-function koreanPdfFont() {
-  const candidates = [
-    "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
-    "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
-    "C:/Windows/Fonts/malgun.ttf",
-  ];
-  return candidates.find((candidate) => existsSync(candidate));
-}
-
-async function createPdf(input: ReportFileInput) {
-  const font = koreanPdfFont();
-  if (!font) throw new Error("PDF 생성을 위한 한글 글꼴을 찾지 못했습니다.");
-  const document = new PDFDocument({ size: "A4", margin: 54, info: { Title: input.title, Subject: input.subtitle } });
-  const chunks: Buffer[] = [];
-  document.on("data", (chunk: Buffer) => chunks.push(chunk));
-  const completed = new Promise<Uint8Array>((resolve, reject) => {
-    document.on("end", () => resolve(new Uint8Array(Buffer.concat(chunks))));
-    document.on("error", reject);
-  });
-  document.registerFont("Korean", font);
-  document.font("Korean").fillColor(`#${primaryColor(input)}`).fontSize(20).text(input.title, { align: input.style?.titleAlignment === "CENTER" ? "center" : "left" });
-  document.moveDown(0.4).fillColor(`#${accentColor(input)}`).fontSize(10).text(input.subtitle);
-  document.moveDown(1.2);
-  if (input.document) {
-    for (const block of input.document.blocks) {
-      document.moveDown(0.7).fillColor(`#${primaryColor(input)}`).fontSize(14).text(block.heading).moveDown(0.25);
-      block.paragraphs.forEach((text) => document.fillColor("#1E293B").fontSize(10.5).text(text, { paragraphGap: 7, lineGap: 2 }));
-      block.bullets.forEach((text) => document.fillColor("#1E293B").fontSize(10.5).text(`• ${text}`, { indent: 10, paragraphGap: 5, lineGap: 2 }));
-      if (block.columns.length) {
-        document.fillColor(`#${accentColor(input)}`).fontSize(9.5).text(block.columns.join("  |  "));
-        block.rows.forEach((row) => document.fillColor("#1E293B").fontSize(9).text(row.join("  |  "), { paragraphGap: 3 }));
-      }
-    }
-  } else {
-  for (const line of contentLines(input.report)) {
-    if (line.kind === "heading") {
-      document.moveDown(0.7).fillColor("#0F766E").fontSize(14).text(line.text).moveDown(0.25);
-    } else if (line.kind === "bullet") {
-      document.fillColor("#1E293B").fontSize(10.5).text(`• ${line.text}`, { indent: 10, paragraphGap: 5, lineGap: 2 });
-    } else {
-      document.fillColor("#1E293B").fontSize(10.5).text(line.text, { paragraphGap: 7, lineGap: 2 });
-    }
-  }
-  }
-  document.end();
-  return completed;
-}
-
 export async function createReportFile(input: ReportFileInput) {
   let body: Uint8Array;
   if (input.format === "docx") body = await createDocx(input);
   else if (input.format === "csv") body = createCsv(input);
   else if (input.format === "xlsx") body = await createXlsx(input);
   else if (input.format === "pptx") body = await createPptx(input);
-  else if (input.format === "pdf") body = await createPdf(input);
   else body = new TextEncoder().encode(`\uFEFF${plainText(input)}`);
   return { body, mimeType: formatInfo[input.format].mimeType, extension: input.format, label: formatInfo[input.format].label };
 }

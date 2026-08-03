@@ -152,7 +152,7 @@ textarea.field { min-height: 6rem; resize: vertical; }
   .week-cell { min-height: 4.25rem; padding: .2rem; }
   .week-head { min-height: 2.8rem; }
   .week-label { font-size: .61rem; line-height: 1.2; }
-  .day-grid { min-width: 51rem; grid-template-columns: 5rem repeat(2, minmax(23rem, 1fr)); }
+  .day-grid { min-width: 28rem; grid-template-columns: 5rem repeat(2, minmax(11.5rem, 1fr)); }
   .day-grid.day-grid-single { min-width: 34rem; grid-template-columns: 5rem minmax(29rem, 1fr); }
   .day-cell { min-height: 5rem; padding: .5rem; }
   .day-head { min-height: 3rem; }

@@ -182,7 +182,6 @@ export function DayBoard({ organizationId, days, departments, schedules }: {
                             {schedule.itemType !== "TASK" && <><Clock3 size={15} /> {schedule.isAllDay ? "종일" : `${format(schedule.startsAt, "HH:mm")} – ${format(schedule.endsAt, "HH:mm")}`}<span>·</span></>}
                             <span>{schedule.targetUserName || schedule.creatorProfileName || "담당자 없음"}</span>
                           </span>
-                          {schedule.departmentName && <span className="badge badge-gray">{schedule.departmentName}</span>}
                           {schedule.isImportant && <span className="badge badge-orange"><Flag size={12} /> 중요</span>}
                           {schedule.isCompleted && <span className="badge badge-green"><CheckCircle2 size={12} /> 완료</span>}
                         </div>
