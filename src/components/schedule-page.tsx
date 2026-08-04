@@ -3,6 +3,7 @@ import { addDays, addMonths, addWeeks, eachDayOfInterval, endOfMonth, endOfWeek,
 import { ko } from "date-fns/locale";
 import { CalendarDays, ChevronLeft, ChevronRight, Printer, SlidersHorizontal, Sparkles } from "lucide-react";
 import { getScheduleContext, listSchedules } from "@/features/queries";
+import { getReferenceRange } from "@/features/schedule-periods";
 import { DayBoard, MonthBoard, ScheduleItem, WeekBoard } from "@/components/schedule-board";
 import { DatePickerNavigation } from "@/components/date-picker-navigation";
 import { SubmitButton } from "@/components/submit-button";
@@ -46,7 +47,8 @@ export async function SchedulePage({ organizationId, view, search }: { organizat
   const selectedCategories = many(search.category);
   const department = one(search.department);
   const member = one(search.member);
-  const [context, schedules] = await Promise.all([
+  const referenceRange = getReferenceRange(selectedDate, view);
+  const [context, schedules, referenceSchedules] = await Promise.all([
     getScheduleContext(organizationId),
     listSchedules({
       organizationId,
@@ -57,6 +59,16 @@ export async function SchedulePage({ organizationId, view, search }: { organizat
       memberId: member,
       dayCount: view === "day" ? 2 : undefined,
     }),
+    listSchedules({
+      organizationId,
+      date: referenceRange.start,
+      view: view === "day" ? "week" : "month",
+      categories: selectedCategories,
+      departmentId: department,
+      memberId: member,
+      rangeStart: referenceRange.start,
+      rangeEnd: referenceRange.end,
+    }),
   ]);
   const weekStart = startOfWeek(selectedDate, { weekStartsOn: 1 });
   const weekDays = Array.from({ length: 7 }, (_, index) => addDays(weekStart, index));
@@ -66,12 +78,15 @@ export async function SchedulePage({ organizationId, view, search }: { organizat
   const previous = view === "day" ? addDays(selectedDate, -1) : view === "week" ? addWeeks(selectedDate, -1) : addMonths(selectedDate, -1);
   const next = view === "day" ? addDays(selectedDate, 1) : view === "week" ? addWeeks(selectedDate, 1) : addMonths(selectedDate, 1);
   const profileNames = new Map(context.members.map((item) => [item.userId, item.profileName?.trim() || item.user.name]));
-  const serialized: ScheduleItem[] = schedules.map((schedule) => ({
+  const serialize = (schedule: (typeof schedules)[number]): ScheduleItem => ({
     ...schedule,
     departmentName: schedule.department?.name ?? null,
     targetUserName: schedule.targetUserId ? profileNames.get(schedule.targetUserId) ?? schedule.targetUser?.name ?? null : null,
     creatorProfileName: schedule.createdByUserId ? profileNames.get(schedule.createdByUserId) ?? schedule.createdBy?.name ?? null : null,
-  }));
+  });
+  const serialized = schedules.map(serialize);
+  const serializedReferences = referenceSchedules.map(serialize);
+  const referenceDays = eachDayOfInterval({ start: referenceRange.start, end: addDays(referenceRange.end, -1) });
   const dateValue = format(selectedDate, "yyyy-MM-dd");
   const querySuffix = (date: Date, keepFilters = true) => {
     const params = new URLSearchParams({ date: format(date, "yyyy-MM-dd") });
@@ -140,6 +155,42 @@ export async function SchedulePage({ organizationId, view, search }: { organizat
         <MonthBoard organizationId={organizationId} days={monthDays} currentMonth={selectedDate.getMonth()} schedules={serialized} />
       )}
       {!serialized.length && <div className="card p-8 text-center"><CalendarDays className="mx-auto text-[var(--brand)]" /><p className="mt-3 font-bold">표시할 일정이 없습니다</p><p className="muted mt-1 text-sm">개인 일정 관리에서 일정이나 업무를 등록하거나 필터를 초기화해 보세요.</p><Link className="btn btn-primary mt-4" href={`/org/${organizationId}/personal?date=${dateValue}`}>개인 일정 관리 열기</Link></div>}
+
+      <section className="mt-3 grid gap-4" aria-labelledby="reference-schedule-title">
+        <header className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="eyebrow">Reference schedule</p>
+            <h2 className="mt-1 text-xl font-extrabold" id="reference-schedule-title">
+              {view === "day" ? "참고용 주간 계획표" : view === "week" ? "참고용 다음 4주 일정표" : "참고용 다음 달 일정표"}
+            </h2>
+            <p className="muted mt-1 text-sm">현재 적용한 필터와 동일하게 표시됩니다.</p>
+          </div>
+          <span className="badge badge-gray">AI 보고서 제외</span>
+        </header>
+
+        {view === "day" ? [0, 1].map((weekOffset) => {
+          const referenceWeekStart = addWeeks(referenceRange.start, weekOffset);
+          const referenceWeekDays = Array.from({ length: 7 }, (_, index) => addDays(referenceWeekStart, index));
+          return (
+            <div className="grid gap-2" key={referenceWeekStart.toISOString()}>
+              <h3 className="text-sm font-extrabold">
+                {weekOffset === 0 ? "해당 주" : "다음 주"} · {format(referenceWeekStart, "M월 d일", { locale: ko })} – {format(addDays(referenceWeekStart, 6), "M월 d일", { locale: ko })}
+              </h3>
+              <WeekBoard organizationId={organizationId} days={referenceWeekDays} departments={context.departments.map(({ id, name, isSystem }) => ({ id, name, isSystem }))} schedules={serializedReferences} readOnly />
+            </div>
+          );
+        }) : view === "week" ? (
+          <div className="grid gap-2">
+            <p className="text-sm font-extrabold">{format(referenceRange.start, "yyyy년 M월 d일", { locale: ko })} – {format(addDays(referenceRange.end, -1), "M월 d일", { locale: ko })}</p>
+            <MonthBoard organizationId={organizationId} days={referenceDays} schedules={serializedReferences} readOnly />
+          </div>
+        ) : (
+          <div className="grid gap-2">
+            <p className="text-sm font-extrabold">{format(addMonths(selectedDate, 1), "yyyy년 M월", { locale: ko })}</p>
+            <MonthBoard organizationId={organizationId} days={referenceDays} currentMonth={addMonths(selectedDate, 1).getMonth()} schedules={serializedReferences} readOnly />
+          </div>
+        )}
+      </section>
     </div>
   );
 }

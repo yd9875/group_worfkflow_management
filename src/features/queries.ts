@@ -1,10 +1,11 @@
 import type { Prisma, ScheduleCategory } from "@prisma/client";
-import { addDays, endOfDay, endOfMonth, endOfWeek, startOfDay, startOfMonth, startOfWeek } from "date-fns";
+import { endOfDay, startOfDay } from "date-fns";
 import { cache } from "react";
 import { prisma } from "@/lib/db";
 import { decryptJoinCode } from "@/lib/join-code";
 import { requireMembership, requireUser } from "@/lib/session";
 import { canEditSchedule, isManager } from "@/features/permissions";
+import { getReportRange, getScheduleRange } from "@/features/schedule-periods";
 
 export async function listMyOrganizations() {
   const user = await requireUser();
@@ -79,20 +80,13 @@ export async function listSchedules(input: {
   departmentId?: string;
   memberId?: string;
   dayCount?: number;
+  rangeStart?: Date;
+  rangeEnd?: Date;
 }) {
   const membership = await requireMembership(input.organizationId);
-  const rangeStart =
-    input.view === "day"
-      ? startOfDay(input.date)
-      : input.view === "week"
-      ? startOfWeek(input.date, { weekStartsOn: 1 })
-      : startOfWeek(startOfMonth(input.date), { weekStartsOn: 1 });
-  const rangeEnd =
-    input.view === "day"
-      ? endOfDay(addDays(input.date, Math.max(1, Math.min(input.dayCount ?? 1, 7)) - 1))
-      : input.view === "week"
-      ? endOfWeek(input.date, { weekStartsOn: 1 })
-      : endOfWeek(endOfMonth(input.date), { weekStartsOn: 1 });
+  const defaultRange = getScheduleRange(input.date, input.view, input.dayCount);
+  const rangeStart = input.rangeStart ?? defaultRange.start;
+  const rangeEnd = input.rangeEnd ?? defaultRange.end;
 
   const visibility: Prisma.ScheduleWhereInput = isManager(membership.role)
     ? {
@@ -164,6 +158,93 @@ export async function listSchedules(input: {
   });
 }
 
+export async function searchSchedules(input: {
+  organizationId: string;
+  query: string;
+  categories?: string[];
+  departmentId?: string;
+  memberId?: string;
+}) {
+  const membership = await requireMembership(input.organizationId);
+  const visibility: Prisma.ScheduleWhereInput = isManager(membership.role)
+    ? {
+        OR: [
+          { scope: "ORGANIZATION" },
+          { scope: "DEPARTMENT" },
+          { scope: "PERSONAL", targetUserId: membership.userId },
+        ],
+      }
+    : {
+        OR: [
+          { scope: "ORGANIZATION" },
+          { scope: "DEPARTMENT", departmentId: membership.departmentId },
+          { scope: "PERSONAL", targetUserId: membership.userId },
+        ],
+      };
+  const scheduleCategories = new Set([
+    "GENERAL", "MEETING", "TRAINING", "LEAVE", "BUSINESS_TRIP", "OUTING", "OTHER",
+  ]);
+  const selectedCategories = (input.categories ?? []).filter((category) => scheduleCategories.has(category));
+  const categoryOptions: Prisma.ScheduleWhereInput[] = [];
+  if (selectedCategories.length) {
+    categoryOptions.push({ itemType: "SCHEDULE", category: { in: selectedCategories as ScheduleCategory[] } });
+  }
+  if (input.categories?.includes("TASK")) categoryOptions.push({ itemType: "TASK" });
+  const normalizedQuery = input.query.trim();
+
+  return prisma.schedule.findMany({
+    where: {
+      organizationId: input.organizationId,
+      deletedAt: null,
+      AND: [
+        visibility,
+        { OR: [{ scope: { not: "PERSONAL" } }, { showInWeek: true }] },
+        ...(categoryOptions.length ? [{ OR: categoryOptions }] : []),
+        ...(input.departmentId ? [{ departmentId: input.departmentId }] : []),
+        ...(input.memberId
+          ? [{ OR: [{ targetUserId: input.memberId }, { createdByUserId: input.memberId }] }]
+          : []),
+        {
+          OR: [
+            { title: { contains: normalizedQuery, mode: "insensitive" } },
+            { description: { contains: normalizedQuery, mode: "insensitive" } },
+            {
+              AND: [
+                { scope: { not: "PERSONAL" } },
+                { memo: { contains: normalizedQuery, mode: "insensitive" } },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      itemType: true,
+      startsAt: true,
+      endsAt: true,
+      isAllDay: true,
+      scope: true,
+      category: true,
+      isImportant: true,
+      showInWeek: true,
+      showInMonth: true,
+      isCompleted: true,
+      memo: true,
+      departmentId: true,
+      targetUserId: true,
+      createdByUserId: true,
+      department: { select: { name: true } },
+      targetUser: { select: { name: true } },
+      createdBy: { select: { name: true } },
+    },
+    orderBy: [{ startsAt: "desc" }, { isImportant: "desc" }],
+    take: 500,
+  });
+}
+
 export async function getPlannerData(
   organizationId: string,
   date: Date,
@@ -208,8 +289,15 @@ export async function getReportData(
   view: "day" | "week" | "month",
 ) {
   const membership = await requireMembership(organizationId, ["OWNER", "ADMIN"]);
+  const reportRange = getReportRange(date, view);
   const [schedules, organization, generatedReports] = await Promise.all([
-    listSchedules({ organizationId, date, view }),
+    listSchedules({
+      organizationId,
+      date,
+      view,
+      rangeStart: reportRange.start,
+      rangeEnd: reportRange.end,
+    }),
     prisma.organization.findUniqueOrThrow({
       where: { id: organizationId },
       select: {

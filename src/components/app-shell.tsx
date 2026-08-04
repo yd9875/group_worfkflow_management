@@ -13,6 +13,7 @@ import {
   House,
   MoveHorizontal,
   NotebookPen,
+  Search,
   Settings2,
   UserRoundCog,
   Users,
@@ -102,6 +103,7 @@ export function AppShell({
     { href: `${root}/schedule/day`, label: "일일 계획", icon: CalendarCheck2 },
     { href: `${root}/schedule/week`, label: "주간 일정", icon: CalendarRange },
     { href: `${root}/schedule/month`, label: "월간 일정", icon: CalendarDays },
+    { href: `${root}/search`, label: "일정 및 업무 검색", icon: Search },
     { href: `${root}/members`, label: "구성원 현황", icon: Users },
   ];
   const quickLinks = [

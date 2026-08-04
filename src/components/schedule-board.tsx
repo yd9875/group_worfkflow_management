@@ -79,11 +79,13 @@ function Item({
   organizationId,
   rowKind,
   showCreator = false,
+  readOnly = false,
 }: {
   schedule: ScheduleItem;
   organizationId: string;
   rowKind?: Row["kind"];
   showCreator?: boolean;
+  readOnly?: boolean;
 }) {
   const shouldShowCreator = showCreator && rowKind !== "leave" && rowKind !== "external" && schedule.creatorProfileName;
   return (
@@ -102,20 +104,20 @@ function Item({
         {schedule.description && <p className="mt-2">{schedule.description}</p>}
         {schedule.scope !== "PERSONAL" && schedule.memo && <p className="mt-2 flex items-start gap-1 text-slate-600"><StickyNote className="mt-0.5 shrink-0" size={12} /> {schedule.memo}</p>}
         <p className="mt-2 text-slate-500">등록: {schedule.creatorProfileName || "알 수 없음"}</p>
-        <div className="mt-2 flex flex-wrap gap-2 no-print">
+        {!readOnly && <div className="mt-2 flex flex-wrap gap-2 no-print">
           <Link className="btn btn-secondary min-h-8 px-2 py-1 text-xs" href={`/org/${organizationId}/personal?date=${format(schedule.startsAt, "yyyy-MM-dd")}&edit=${schedule.id}`}><Pencil size={12} /> 수정</Link>
           <form action={deleteScheduleAction}>
             <input type="hidden" name="organizationId" value={organizationId} />
             <input type="hidden" name="scheduleId" value={schedule.id} />
             <SubmitButton className="btn btn-danger min-h-8 px-2 py-1 text-xs" pendingLabel="삭제 중…"><Trash2 size={12} /> 삭제</SubmitButton>
           </form>
-        </div>
+        </div>}
       </div>
     </details>
   );
 }
 
-export function WeekBoard({ organizationId, days, departments, schedules }: { organizationId: string; days: Date[]; departments: Array<{ id: string; name: string; isSystem: boolean }>; schedules: ScheduleItem[] }) {
+export function WeekBoard({ organizationId, days, departments, schedules, readOnly = false }: { organizationId: string; days: Date[]; departments: Array<{ id: string; name: string; isSystem: boolean }>; schedules: ScheduleItem[]; readOnly?: boolean }) {
   const rows: Row[] = [
     { id: "common", label: "공통사항", kind: "common" },
     ...departments.filter((department) => !department.isSystem).map((department) => ({ id: `department-${department.id}`, label: department.name, kind: "department" as const, departmentId: department.id })),
@@ -127,17 +129,17 @@ export function WeekBoard({ organizationId, days, departments, schedules }: { or
       <div className="week-grid">
         <div className="week-cell week-head week-label grid place-items-center font-extrabold">구분</div>
         {days.map((day) => <div key={day.toISOString()} className={`week-cell week-head grid place-items-center ${isToday(day) ? "today" : ""}`}><span className="text-sm font-extrabold">{format(day, "M.d")}</span><span className="muted text-xs">{format(day, "EEE", { locale: ko })}</span></div>)}
-        {rows.map((row) => <div key={row.id} className="contents"><div className="week-cell week-label flex items-center font-bold">{row.label}</div>{days.map((day) => { const items = schedules.filter((schedule) => belongsToRow(schedule, row) && occursOnDay(schedule, day)); return <div key={`${row.id}-${day.toISOString()}`} className={`week-cell ${isToday(day) ? "today" : ""}`}>{items.map((schedule) => <Item key={schedule.id} schedule={schedule} organizationId={organizationId} rowKind={row.kind} showCreator />)}</div>; })}</div>)}
+        {rows.map((row) => <div key={row.id} className="contents"><div className="week-cell week-label flex items-center font-bold">{row.label}</div>{days.map((day) => { const items = schedules.filter((schedule) => belongsToRow(schedule, row) && occursOnDay(schedule, day)); return <div key={`${row.id}-${day.toISOString()}`} className={`week-cell ${isToday(day) ? "today" : ""}`}>{items.map((schedule) => <Item key={schedule.id} schedule={schedule} organizationId={organizationId} rowKind={row.kind} showCreator readOnly={readOnly} />)}</div>; })}</div>)}
       </div>
     </div>
   );
 }
 
-export function MonthBoard({ organizationId, days, currentMonth, schedules }: { organizationId: string; days: Date[]; currentMonth: number; schedules: ScheduleItem[] }) {
+export function MonthBoard({ organizationId, days, currentMonth, schedules, readOnly = false }: { organizationId: string; days: Date[]; currentMonth?: number; schedules: ScheduleItem[]; readOnly?: boolean }) {
   return (
     <div className="schedule-scroll" aria-label="월간 캘린더"><div className="month-grid">
       {["월", "화", "수", "목", "금", "토", "일"].map((label) => <div key={label} className="month-cell month-head">{label}</div>)}
-      {days.map((day) => { const items = schedules.filter((schedule) => occursOnDay(schedule, day)); return <div key={day.toISOString()} className={`month-cell ${isToday(day) ? "today" : ""} ${day.getMonth() !== currentMonth ? "opacity-45" : ""}`}><p className="mb-2 text-sm font-extrabold">{format(day, "d")}</p>{items.map((schedule) => <Item key={schedule.id} schedule={schedule} organizationId={organizationId} />)}</div>; })}
+      {days.map((day) => { const items = schedules.filter((schedule) => occursOnDay(schedule, day)); return <div key={day.toISOString()} className={`month-cell ${isToday(day) ? "today" : ""} ${currentMonth !== undefined && day.getMonth() !== currentMonth ? "opacity-45" : ""}`}><p className="mb-2 text-sm font-extrabold">{format(day, "d")}</p>{items.map((schedule) => <Item key={schedule.id} schedule={schedule} organizationId={organizationId} readOnly={readOnly} />)}</div>; })}
     </div></div>
   );
 }
