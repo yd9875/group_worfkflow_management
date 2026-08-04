@@ -164,6 +164,8 @@ export async function searchSchedules(input: {
   categories?: string[];
   departmentId?: string;
   memberId?: string;
+  rangeStart: Date;
+  rangeEnd: Date;
 }) {
   const membership = await requireMembership(input.organizationId);
   const visibility: Prisma.ScheduleWhereInput = isManager(membership.role)
@@ -196,6 +198,8 @@ export async function searchSchedules(input: {
     where: {
       organizationId: input.organizationId,
       deletedAt: null,
+      startsAt: { lt: input.rangeEnd },
+      endsAt: { gt: input.rangeStart },
       AND: [
         visibility,
         { OR: [{ scope: { not: "PERSONAL" } }, { showInWeek: true }] },
@@ -288,7 +292,7 @@ export async function getReportData(
   date: Date,
   view: "day" | "week" | "month",
 ) {
-  const membership = await requireMembership(organizationId, ["OWNER", "ADMIN"]);
+  const membership = await requireMembership(organizationId);
   const reportRange = getReportRange(date, view);
   const [schedules, organization, generatedReports] = await Promise.all([
     listSchedules({
@@ -305,6 +309,9 @@ export async function getReportData(
         reportReference: true,
         reportTemplateSchema: true,
         reportTemplateFingerprint: true,
+        aiProvider: true,
+        aiModel: true,
+        aiApiKeyCiphertext: true,
         reportReferencePrinciples: {
           select: { id: true, content: true },
           orderBy: { createdAt: "asc" },
@@ -319,6 +326,7 @@ export async function getReportData(
       where: { organizationId },
       select: {
         id: true,
+        createdByUserId: true,
         view: true,
         referenceDate: true,
         format: true,
@@ -355,7 +363,7 @@ export type AdminSection = "requests" | "departments" | "members" | "settings" |
 
 export async function getAdminData(organizationId: string, section: AdminSection) {
   const currentMembership = await requireMembership(organizationId, ["OWNER", "ADMIN"]);
-  const [requests, departments, members, auditLogs, reportReferenceFiles, savedReportPrinciples] = await Promise.all([
+  const [requests, departments, members, auditLogs, reportReferenceFiles, savedReportPrinciples, aiConnectionRecord] = await Promise.all([
     section === "requests" ? prisma.joinRequest.findMany({
       where: { organizationId, status: "PENDING" },
       select: {
@@ -414,6 +422,10 @@ export async function getAdminData(organizationId: string, section: AdminSection
       select: { id: true, content: true },
       orderBy: { createdAt: "asc" },
     }) : Promise.resolve([]),
+    section === "settings" ? prisma.organization.findUniqueOrThrow({
+      where: { id: organizationId },
+      select: { aiProvider: true, aiModel: true, aiApiKeyCiphertext: true },
+    }) : Promise.resolve(null),
   ]);
   const reportPrinciples = [
     ...(currentMembership.organization.reportReference?.trim()
@@ -424,5 +436,10 @@ export async function getAdminData(organizationId: string, section: AdminSection
   const joinCode = section === "settings"
     ? decryptJoinCode(currentMembership.organization.joinCodeCiphertext)
     : null;
-  return { currentMembership, requests, departments, members, auditLogs, reportReferenceFiles, reportPrinciples, joinCode };
+  const aiConnection = aiConnectionRecord ? {
+    provider: aiConnectionRecord.aiProvider,
+    model: aiConnectionRecord.aiModel,
+    hasApiKey: Boolean(aiConnectionRecord.aiApiKeyCiphertext),
+  } : null;
+  return { currentMembership, requests, departments, members, auditLogs, reportReferenceFiles, reportPrinciples, joinCode, aiConnection };
 }

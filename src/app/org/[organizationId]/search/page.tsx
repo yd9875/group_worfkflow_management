@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { format } from "date-fns";
+import { addDays, endOfMonth, format, startOfMonth } from "date-fns";
 import { ko } from "date-fns/locale";
+import { toZonedTime } from "date-fns-tz";
 import { ArrowRight, CalendarDays, CheckCircle2, Clock3, Flag, Search, SlidersHorizontal } from "lucide-react";
 import { getScheduleContext, searchSchedules } from "@/features/queries";
 import { SubmitButton } from "@/components/submit-button";
@@ -37,6 +38,16 @@ export default async function ScheduleSearchPage({ params, searchParams }: {
   const selectedCategories = many(search.category);
   const department = one(search.department);
   const member = one(search.member);
+  const today = toZonedTime(new Date(), "Asia/Seoul");
+  const defaultStartsOn = format(startOfMonth(today), "yyyy-MM-dd");
+  const defaultEndsOn = format(endOfMonth(today), "yyyy-MM-dd");
+  const requestedStartsOn = one(search.startsOn);
+  const requestedEndsOn = one(search.endsOn);
+  const startsOn = requestedStartsOn && /^\d{4}-\d{2}-\d{2}$/.test(requestedStartsOn) ? requestedStartsOn : defaultStartsOn;
+  const candidateEndsOn = requestedEndsOn && /^\d{4}-\d{2}-\d{2}$/.test(requestedEndsOn) ? requestedEndsOn : defaultEndsOn;
+  const endsOn = candidateEndsOn >= startsOn ? candidateEndsOn : startsOn;
+  const rangeStart = new Date(`${startsOn}T00:00:00+09:00`);
+  const rangeEnd = addDays(new Date(`${endsOn}T00:00:00+09:00`), 1);
   const [context, schedules] = await Promise.all([
     getScheduleContext(organizationId),
     query
@@ -46,6 +57,8 @@ export default async function ScheduleSearchPage({ params, searchParams }: {
           categories: selectedCategories,
           departmentId: department,
           memberId: member,
+          rangeStart,
+          rangeEnd,
         })
       : Promise.resolve([]),
   ]);
@@ -92,6 +105,8 @@ export default async function ScheduleSearchPage({ params, searchParams }: {
         </fieldset>
 
         <div className="flex flex-wrap items-end gap-3">
+          <label className="label min-w-40 flex-1">검색 시작일<input className="field" type="date" name="startsOn" defaultValue={startsOn} /></label>
+          <label className="label min-w-40 flex-1">검색 종료일<input className="field" type="date" name="endsOn" defaultValue={endsOn} /></label>
           <label className="label min-w-36 flex-1">부서<select className="field" name="department" defaultValue={department ?? ""}><option value="">전체 부서</option>{context.departments.filter((item) => !item.isSystem).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
           <label className="label min-w-36 flex-1">구성원<select className="field" name="member" defaultValue={member ?? ""}><option value="">전체 구성원</option>{context.members.map((item) => <option key={item.userId} value={item.userId}>{item.profileName?.trim() || item.user.name}</option>)}</select></label>
           <SubmitButton className="btn btn-secondary" pendingLabel="필터 적용 중…">필터 적용</SubmitButton>
@@ -103,7 +118,7 @@ export default async function ScheduleSearchPage({ params, searchParams }: {
         <section className="grid gap-4" aria-live="polite">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-lg font-extrabold">‘{query}’ 검색 결과</h2>
-            <p className="muted text-sm">{schedules.length}개 항목 · {grouped.size}개 날짜</p>
+            <p className="muted text-sm">{startsOn} – {endsOn} · {schedules.length}개 항목 · {grouped.size}개 날짜</p>
           </div>
           {[...grouped.entries()].map(([date, items]) => (
             <article className="card overflow-hidden" key={date}>

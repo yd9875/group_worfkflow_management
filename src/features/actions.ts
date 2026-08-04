@@ -22,6 +22,8 @@ import {
 } from "@/features/permissions";
 import { adjacentSortUpdates, scheduleInputSchema } from "@/features/schedule-rules";
 import { deleteR2Object, deleteR2Objects, putR2Object } from "@/lib/r2";
+import { getAiProvider } from "@/lib/ai-browser-settings";
+import { encryptOrganizationAiApiKey } from "@/lib/organization-ai-secret";
 
 const organizationSchema = z.object({
   name: z.string().trim().min(2).max(60),
@@ -1183,6 +1185,72 @@ export async function rotateJoinCodeAction(formData: FormData) {
     }),
   ]);
   revalidatePath(`/org/${organizationId}/admin/settings`);
+}
+
+export async function saveOrganizationAiConnectionAction(formData: FormData) {
+  const organizationId = text(formData, "organizationId");
+  const actor = await requireMembership(organizationId, ["OWNER", "ADMIN"]);
+  const provider = z.enum(["OPENAI", "ANTHROPIC", "GEMINI"]).parse(text(formData, "provider"));
+  const model = z.string().trim().min(1).max(100).parse(text(formData, "model"));
+  const apiKey = text(formData, "apiKey").trim();
+  if (!getAiProvider(provider).models.some((item) => item.value === model)) {
+    throw new AppError("VALIDATION_ERROR", "선택한 AI 제공사에서 지원하지 않는 모델입니다.");
+  }
+  if (apiKey && (apiKey.length < 20 || apiKey.length > 500)) {
+    throw new AppError("VALIDATION_ERROR", "API 키 형식을 확인해 주세요.");
+  }
+  const existing = await prisma.organization.findUniqueOrThrow({
+    where: { id: organizationId },
+    select: { aiProvider: true, aiApiKeyCiphertext: true },
+  });
+  if (!apiKey && (!existing.aiApiKeyCiphertext || existing.aiProvider !== provider)) {
+    throw new AppError("VALIDATION_ERROR", "선택한 제공사의 API 키를 입력해 주세요.");
+  }
+  await prisma.$transaction([
+    prisma.organization.update({
+      where: { id: organizationId },
+      data: {
+        aiProvider: provider,
+        aiModel: model,
+        ...(apiKey ? { aiApiKeyCiphertext: encryptOrganizationAiApiKey(organizationId, apiKey) } : {}),
+      },
+    }),
+    prisma.auditLog.create({
+      data: {
+        organizationId,
+        actorUserId: actor.userId,
+        action: "ORGANIZATION_AI_CONNECTION_SAVED",
+        entityType: "ORGANIZATION",
+        entityId: organizationId,
+        metadataJson: { provider, model, apiKeyUpdated: Boolean(apiKey) },
+      },
+    }),
+  ]);
+  revalidatePath(`/org/${organizationId}/admin/settings`);
+  revalidatePath(`/org/${organizationId}/report`);
+}
+
+export async function deleteOrganizationAiConnectionAction(formData: FormData) {
+  const organizationId = text(formData, "organizationId");
+  const actor = await requireMembership(organizationId, ["OWNER", "ADMIN"]);
+  await prisma.$transaction([
+    prisma.organization.update({
+      where: { id: organizationId },
+      data: { aiProvider: null, aiModel: null, aiApiKeyCiphertext: null },
+    }),
+    prisma.auditLog.create({
+      data: {
+        organizationId,
+        actorUserId: actor.userId,
+        action: "ORGANIZATION_AI_CONNECTION_DELETED",
+        entityType: "ORGANIZATION",
+        entityId: organizationId,
+        metadataJson: {},
+      },
+    }),
+  ]);
+  revalidatePath(`/org/${organizationId}/admin/settings`);
+  revalidatePath(`/org/${organizationId}/report`);
 }
 
 export async function createReportReferencePrincipleAction(formData: FormData) {

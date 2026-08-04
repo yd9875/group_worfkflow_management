@@ -6,6 +6,7 @@ import { type AiProvider, getAiProvider } from "@/lib/ai-browser-settings";
 import { prisma } from "@/lib/db";
 import { createReportFile, safeReportFileName } from "@/lib/report-file";
 import { REPORT_FORMATS } from "@/lib/report-formats";
+import { decryptOrganizationAiApiKey } from "@/lib/organization-ai-secret";
 import { deleteR2Object, getR2Object, putR2Object } from "@/lib/r2";
 import {
   extractReportReferenceText,
@@ -32,14 +33,8 @@ const inputSchema = z.object({
   organizationId: z.string().uuid(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   view: z.enum(["day", "week", "month"]),
-  provider: z.enum(["OPENAI", "ANTHROPIC", "GEMINI"]),
-  apiKey: z.string().trim().min(20).max(500),
-  model: z.string().trim().min(1).max(100),
   format: z.enum(REPORT_FORMATS),
-}).refine(
-  (input) => getAiProvider(input.provider).models.some((model) => model.value === input.model),
-  { message: "선택한 AI 제공사에서 지원하지 않는 모델입니다.", path: ["model"] },
-);
+});
 
 type ReferenceFiles = ReportReferenceFile[];
 
@@ -277,6 +272,16 @@ export async function POST(request: Request) {
     const input = inputSchema.parse(await request.json());
     const selectedDate = new Date(`${input.date}T12:00:00`);
     const { schedules, organization, membership } = await getReportData(input.organizationId, selectedDate, input.view);
+    const providerResult = z.enum(["OPENAI", "ANTHROPIC", "GEMINI"]).safeParse(organization.aiProvider);
+    if (!providerResult.success || !organization.aiModel || !organization.aiApiKeyCiphertext) {
+      return NextResponse.json({ error: "조직 관리에서 조직 공용 AI 연결을 먼저 설정해 주세요." }, { status: 409 });
+    }
+    const provider = providerResult.data;
+    const model = organization.aiModel;
+    if (!getAiProvider(provider).models.some((item) => item.value === model)) {
+      return NextResponse.json({ error: "조직에 저장된 AI 모델 설정이 올바르지 않습니다. 조직 관리에서 다시 저장해 주세요." }, { status: 409 });
+    }
+    const apiKey = decryptOrganizationAiApiKey(input.organizationId, organization.aiApiKeyCiphertext);
     const scheduleData = schedules.map((item) => ({
       title: item.title,
       type: item.itemType,
@@ -302,7 +307,7 @@ export async function POST(request: Request) {
     ].filter((value): value is string => Boolean(value?.trim())).map((value) => value.trim());
     const templateFingerprint = createHash("sha256").update(JSON.stringify({
       profileSchemaVersion: "1.0",
-      analyzer: { provider: input.provider, model: input.model },
+      analyzer: { provider, model },
       principles,
       files: organization.reportReferenceFiles.map((file) => ({
         fileName: file.fileName,
@@ -320,7 +325,7 @@ export async function POST(request: Request) {
     } else if (!principles.length && !referenceFiles.length) {
       templateProfile = defaultReportTemplateProfile();
     } else {
-      const templateResult = await callProvider(input.provider, input.apiKey, input.model, {
+      const templateResult = await callProvider(provider, apiKey, model, {
         name: "report_template_profile",
         schema: REPORT_TEMPLATE_PROFILE_JSON_SCHEMA,
         prompt: await buildTemplateAnalysisPrompt({ organizationName: organization.name, principles, referenceFiles }),
@@ -330,7 +335,7 @@ export async function POST(request: Request) {
       }, membership.userId);
       if (templateResult.status < 200 || templateResult.status >= 300) {
         return NextResponse.json(
-          { error: templateResult.error || `${getAiProvider(input.provider).label}가 레퍼런스 양식을 분석하지 못했습니다.` },
+          { error: templateResult.error || `${getAiProvider(provider).label}가 레퍼런스 양식을 분석하지 못했습니다.` },
           { status: templateResult.status >= 400 && templateResult.status < 600 ? templateResult.status : 502 },
         );
       }
@@ -338,7 +343,7 @@ export async function POST(request: Request) {
         templateProfile = normalizeTemplateProfile(reportTemplateProfileSchema.parse(parseStructuredText(templateResult.text ?? "")));
       } catch (error) {
         console.error("Report template profile validation failed", error);
-        return NextResponse.json({ error: `${getAiProvider(input.provider).label}의 레퍼런스 양식 분석 결과가 올바르지 않습니다. 다시 시도해 주세요.` }, { status: 502 });
+        return NextResponse.json({ error: `${getAiProvider(provider).label}의 레퍼런스 양식 분석 결과가 올바르지 않습니다. 다시 시도해 주세요.` }, { status: 502 });
       }
       await prisma.organization.update({
         where: { id: input.organizationId },
@@ -350,7 +355,7 @@ export async function POST(request: Request) {
       }).catch((error) => console.error("Report template profile cache failed", error));
     }
 
-    const result = await callProvider(input.provider, input.apiKey, input.model, {
+    const result = await callProvider(provider, apiKey, model, {
       name: "report_document",
       schema: REPORT_DOCUMENT_JSON_SCHEMA,
       prompt: buildReportPrompt({ organizationName: organization.name, view: input.view, date: input.date, scheduleData, templateProfile }),
@@ -360,7 +365,7 @@ export async function POST(request: Request) {
     }, membership.userId);
     if (result.status < 200 || result.status >= 300) {
       return NextResponse.json(
-        { error: result.error || `${getAiProvider(input.provider).label} 요청에 실패했습니다. API 키와 모델을 확인해 주세요.` },
+        { error: result.error || `${getAiProvider(provider).label} 요청에 실패했습니다. API 키와 모델을 확인해 주세요.` },
         { status: result.status >= 400 && result.status < 600 ? result.status : 502 },
       );
     }
@@ -369,7 +374,7 @@ export async function POST(request: Request) {
       reportDocument = alignDocumentToTemplate(templateProfile, reportDocumentSchema.parse(parseStructuredText(result.text ?? "")));
     } catch (error) {
       console.error("Report document validation failed", error);
-      return NextResponse.json({ error: `${getAiProvider(input.provider).label} 응답의 보고서 구조가 올바르지 않습니다. 다시 시도해 주세요.` }, { status: 502 });
+      return NextResponse.json({ error: `${getAiProvider(provider).label} 응답의 보고서 구조가 올바르지 않습니다. 다시 시도해 주세요.` }, { status: 502 });
     }
     const viewLabel = input.view === "day" ? "일일" : input.view === "week" ? "주간" : "월간";
     const patternValues = { organizationName: organization.name, viewLabel, date: input.date };

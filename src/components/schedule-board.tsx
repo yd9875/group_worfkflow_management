@@ -104,12 +104,12 @@ function Item({
         {schedule.description && <p className="mt-2">{schedule.description}</p>}
         {schedule.scope !== "PERSONAL" && schedule.memo && <p className="mt-2 flex items-start gap-1 text-slate-600"><StickyNote className="mt-0.5 shrink-0" size={12} /> {schedule.memo}</p>}
         <p className="mt-2 text-slate-500">등록: {schedule.creatorProfileName || "알 수 없음"}</p>
-        {!readOnly && <div className="mt-2 flex flex-wrap gap-2 no-print">
-          <Link className="btn btn-secondary min-h-8 px-2 py-1 text-xs" href={`/org/${organizationId}/personal?date=${format(schedule.startsAt, "yyyy-MM-dd")}&edit=${schedule.id}`}><Pencil size={12} /> 수정</Link>
+        {!readOnly && <div className="schedule-item-actions no-print">
+          <Link aria-label={`${schedule.title} 수정`} className="btn btn-secondary schedule-action-btn" title="수정" href={`/org/${organizationId}/personal?date=${format(schedule.startsAt, "yyyy-MM-dd")}&edit=${schedule.id}`}><Pencil /></Link>
           <form action={deleteScheduleAction}>
             <input type="hidden" name="organizationId" value={organizationId} />
             <input type="hidden" name="scheduleId" value={schedule.id} />
-            <SubmitButton className="btn btn-danger min-h-8 px-2 py-1 text-xs" pendingLabel="삭제 중…"><Trash2 size={12} /> 삭제</SubmitButton>
+            <SubmitButton aria-label={`${schedule.title} 삭제`} className="btn btn-danger schedule-action-btn" title="삭제" pendingLabel="…"><Trash2 /></SubmitButton>
           </form>
         </div>}
       </div>
@@ -174,8 +174,8 @@ export function DayBoard({ organizationId, days, departments, schedules }: {
                 {row.kind === "leave" ? items.map((schedule) => (
                   <Item key={schedule.id} schedule={schedule} organizationId={organizationId} rowKind="leave" />
                 )) : items.map((schedule) => (
-                  <article className={`rounded-xl border border-[var(--line)] bg-white p-4 shadow-sm ${schedule.isCompleted ? "opacity-60" : ""}`} key={schedule.id}>
-                    <div className="flex flex-wrap items-start justify-between gap-4">
+                  <details className={`day-schedule-card rounded-xl border border-[var(--line)] bg-white p-4 shadow-sm ${schedule.isCompleted ? "opacity-60" : ""}`} key={schedule.id}>
+                    <summary className="day-schedule-summary cursor-pointer list-none">
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                           <span className="badge badge-green">{schedule.itemType === "TASK" ? "업무" : categoryLabel[schedule.category] ?? schedule.category}</span>
@@ -190,13 +190,13 @@ export function DayBoard({ organizationId, days, departments, schedules }: {
                         {schedule.description && <p className="mt-3 whitespace-pre-wrap text-sm leading-6">{schedule.description}</p>}
                         {schedule.scope !== "PERSONAL" && schedule.memo && <div className="mt-3 rounded-xl bg-amber-50 p-3 text-sm leading-6 text-amber-900"><StickyNote className="mr-2 inline" size={15} />{schedule.memo}</div>}
                       </div>
-                      <div className="flex flex-wrap gap-2 no-print">
-                        {schedule.itemType === "TASK" && <form action={toggleTaskCompleteAction}><input type="hidden" name="organizationId" value={organizationId} /><input type="hidden" name="scheduleId" value={schedule.id} /><input type="hidden" name="nextCompleted" value={schedule.isCompleted ? "false" : "true"} /><input type="hidden" name="returnView" value="day" /><SubmitButton className="btn btn-secondary" pendingLabel="변경 중…"><CheckCircle2 size={16} /> {schedule.isCompleted ? "미완료로" : "완료"}</SubmitButton></form>}
-                        <Link className="btn btn-secondary" href={`/org/${organizationId}/personal?date=${format(schedule.startsAt, "yyyy-MM-dd")}&edit=${schedule.id}`}><Pencil size={16} /> 수정</Link>
-                        <form action={deleteScheduleAction}><input type="hidden" name="organizationId" value={organizationId} /><input type="hidden" name="scheduleId" value={schedule.id} /><SubmitButton className="btn btn-danger" pendingLabel="삭제 중…"><Trash2 size={16} /> 삭제</SubmitButton></form>
-                      </div>
+                    </summary>
+                    <div className="day-schedule-actions no-print">
+                      {schedule.itemType === "TASK" && <form action={toggleTaskCompleteAction}><input type="hidden" name="organizationId" value={organizationId} /><input type="hidden" name="scheduleId" value={schedule.id} /><input type="hidden" name="nextCompleted" value={schedule.isCompleted ? "false" : "true"} /><input type="hidden" name="returnView" value="day" /><SubmitButton aria-label={schedule.isCompleted ? `${schedule.title} 미완료로 변경` : `${schedule.title} 완료 처리`} className="btn btn-secondary schedule-action-btn" title={schedule.isCompleted ? "미완료로" : "완료"} pendingLabel="…"><CheckCircle2 /></SubmitButton></form>}
+                      <Link aria-label={`${schedule.title} 수정`} className="btn btn-secondary schedule-action-btn" title="수정" href={`/org/${organizationId}/personal?date=${format(schedule.startsAt, "yyyy-MM-dd")}&edit=${schedule.id}`}><Pencil /></Link>
+                      <form action={deleteScheduleAction}><input type="hidden" name="organizationId" value={organizationId} /><input type="hidden" name="scheduleId" value={schedule.id} /><SubmitButton aria-label={`${schedule.title} 삭제`} className="btn btn-danger schedule-action-btn" title="삭제" pendingLabel="…"><Trash2 /></SubmitButton></form>
                     </div>
-                  </article>
+                  </details>
                 ))}
                 {!items.length && <p className="muted py-5 text-center text-sm">등록된 항목이 없습니다.</p>}
                 </div>;

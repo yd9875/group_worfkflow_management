@@ -4,6 +4,7 @@ import { ko } from "date-fns/locale";
 import { ArrowLeft, CheckCircle2, Flag, Sparkles } from "lucide-react";
 import { getReportData } from "@/features/queries";
 import { AiReportGenerator } from "@/components/ai-report-generator";
+import { AI_PROVIDERS } from "@/lib/ai-browser-settings";
 
 const categoryLabel: Record<string, string> = {
   GENERAL: "일반", MEETING: "회의", TRAINING: "교육", LEAVE: "휴가",
@@ -17,7 +18,7 @@ export default async function ReportPage({ params, searchParams }: {
   const [{ organizationId }, search] = await Promise.all([params, searchParams]);
   const view = search.view === "day" || search.view === "month" ? search.view : "week";
   const date = search.date && /^\d{4}-\d{2}-\d{2}$/.test(search.date) ? new Date(`${search.date}T12:00:00`) : new Date();
-  const { schedules, organization, generatedReports } = await getReportData(organizationId, date, view);
+  const { schedules, organization, generatedReports, membership } = await getReportData(organizationId, date, view);
   const tasks = schedules.filter((item) => item.itemType === "TASK");
   const completed = tasks.filter((item) => item.isCompleted);
   const important = schedules.filter((item) => item.isImportant);
@@ -28,6 +29,10 @@ export default async function ReportPage({ params, searchParams }: {
     ...(organization.reportReference?.trim() ? [organization.reportReference.trim()] : []),
     ...organization.reportReferencePrinciples.map((principle) => principle.content),
   ];
+  const configuredProvider = AI_PROVIDERS.find((item) => item.value === organization.aiProvider);
+  const aiConnection = configuredProvider && organization.aiModel && organization.aiApiKeyCiphertext
+    ? { providerLabel: configuredProvider.label, model: organization.aiModel }
+    : null;
 
   return (
     <article className="mx-auto max-w-5xl">
@@ -40,6 +45,8 @@ export default async function ReportPage({ params, searchParams }: {
         organizationId={organizationId}
         date={dateValue}
         view={view}
+        aiConnection={aiConnection}
+        canManageAiConnection={membership.role === "OWNER" || membership.role === "ADMIN"}
         initialReports={generatedReports.map((report) => ({
           id: report.id,
           view: report.view,
@@ -50,6 +57,7 @@ export default async function ReportPage({ params, searchParams }: {
           size: report.size,
           createdAt: report.createdAt.toISOString(),
           createdByName: report.createdBy?.name ?? null,
+          canDelete: membership.role === "OWNER" || membership.role === "ADMIN" || report.createdByUserId === membership.userId,
         }))}
       />
 

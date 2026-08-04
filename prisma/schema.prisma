@@ -138,6 +138,9 @@ model Organization {
   reportTemplateSchema      Json?
   reportTemplateFingerprint String?
   reportTemplateUpdatedAt   DateTime?
+  aiProvider                String?
+  aiModel                   String?
+  aiApiKeyCiphertext        String?
   memberships               Membership[]
   departments               Department[]
   joinRequests              JoinRequest[]

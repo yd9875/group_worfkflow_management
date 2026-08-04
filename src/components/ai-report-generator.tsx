@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useState } from "react";
 import { AlertCircle, Download, FileText, LoaderCircle, Sparkles, Trash2 } from "lucide-react";
 import { LoadingOverlay } from "@/components/loading-overlay";
-import { getAiProvider, readAiBrowserSettings } from "@/lib/ai-browser-settings";
 import { REPORT_FORMATS, type ReportFormat } from "@/lib/report-formats";
 
 type Status = "idle" | "loading" | "success" | "missing" | "error";
@@ -19,6 +18,7 @@ export type GeneratedReportItem = {
   size: number;
   createdAt: string;
   createdByName: string | null;
+  canDelete: boolean;
 };
 
 type GeneratedReportResponse = {
@@ -51,11 +51,13 @@ function createdLabel(value: string) {
   }).format(new Date(value));
 }
 
-export function AiReportGenerator({ organizationId, date, view, initialReports }: {
+export function AiReportGenerator({ organizationId, date, view, initialReports, aiConnection, canManageAiConnection }: {
   organizationId: string;
   date: string;
   view: "day" | "week" | "month";
   initialReports: GeneratedReportItem[];
+  aiConnection: { providerLabel: string; model: string } | null;
+  canManageAiConnection: boolean;
 }) {
   const [status, setStatus] = useState<Status>("idle");
   const [selectedFormat, setSelectedFormat] = useState<ReportFormat>("docx");
@@ -64,15 +66,13 @@ export function AiReportGenerator({ organizationId, date, view, initialReports }
   const [message, setMessage] = useState("파일 형식을 선택한 후 AI 보고서를 생성해 주세요.");
 
   async function generate() {
-    const settings = readAiBrowserSettings(organizationId);
-    if (!settings.apiKey) {
+    if (!aiConnection) {
       setStatus("missing");
-      setMessage("조직 관리에서 이 브라우저에 AI 제공사와 API 키를 먼저 저장해 주세요.");
+      setMessage("조직 관리에서 조직 공용 AI 연결을 먼저 저장해 주세요.");
       return;
     }
     setStatus("loading");
-    const providerLabel = getAiProvider(settings.provider).label;
-    setMessage(`${providerLabel} · ${settings.model} 모델로 ${selectedFormat.toUpperCase()} 파일을 생성하고 있습니다.`);
+    setMessage(`${aiConnection.providerLabel} · ${aiConnection.model} 모델로 ${selectedFormat.toUpperCase()} 파일을 생성하고 있습니다.`);
     try {
       const response = await fetch("/api/ai/report", {
         method: "POST",
@@ -82,9 +82,6 @@ export function AiReportGenerator({ organizationId, date, view, initialReports }
           date,
           view,
           format: selectedFormat,
-          provider: settings.provider,
-          apiKey: settings.apiKey,
-          model: settings.model,
         }),
       });
       const payload = await response.json() as { report?: GeneratedReportResponse; error?: string };
@@ -100,6 +97,7 @@ export function AiReportGenerator({ organizationId, date, view, initialReports }
         size: created.size,
         createdAt: created.createdAt,
         createdByName: created.createdBy?.name ?? null,
+        canDelete: true,
       }, ...current]);
       setStatus("success");
       setMessage(`${selectedFormat.toUpperCase()} 보고서 파일 생성이 완료되었습니다.`);
@@ -157,7 +155,7 @@ export function AiReportGenerator({ organizationId, date, view, initialReports }
         <button className="btn btn-primary mt-4" disabled={status === "loading"} type="button" onClick={() => void generate()}>
           {status === "loading" ? <><LoaderCircle className="animate-spin" size={16} /> 생성 중…</> : <><Sparkles size={16} /> AI 보고서 생성</>}
         </button>
-        {status === "missing" && <div className="mt-5 rounded-xl bg-amber-50 p-4 text-sm"><AlertCircle className="mx-auto text-[var(--accent)]" size={20} /><p className="mt-2">키는 서버에 저장되지 않고 현재 브라우저에만 보관됩니다.</p><Link className="btn btn-secondary mt-3" href={`/org/${organizationId}/admin/settings`}>조직 관리에서 설정</Link></div>}
+        {status === "missing" && <div className="mt-5 rounded-xl bg-amber-50 p-4 text-sm"><AlertCircle className="mx-auto text-[var(--accent)]" size={20} /><p className="mt-2">조직 공용 AI 연결이 설정되지 않았습니다.</p>{canManageAiConnection ? <Link className="btn btn-secondary mt-3" href={`/org/${organizationId}/admin/settings`}>조직 관리에서 설정</Link> : <p className="mt-2 font-bold">조직 관리자에게 AI 연결 설정을 요청해 주세요.</p>}</div>}
         {status === "error" && <div className="mt-5 rounded-xl bg-red-50 p-4 text-sm text-red-800"><AlertCircle className="mx-auto" size={20} /><p className="mt-2">{message}</p></div>}
       </div>
 
@@ -179,7 +177,7 @@ export function AiReportGenerator({ organizationId, date, view, initialReports }
               </div>
               <div className="flex shrink-0 gap-2">
                 <a className="btn btn-secondary min-h-9 px-3 py-1.5 text-sm" href={`/api/ai/report/${report.id}?organizationId=${organizationId}`}><Download size={15} /> 다운로드</a>
-                <button className="btn btn-danger min-h-9 px-3 py-1.5 text-sm" disabled={deletingId === report.id} onClick={() => void remove(report)} type="button"><Trash2 size={15} /> {deletingId === report.id ? "삭제 중…" : "삭제"}</button>
+                {report.canDelete && <button className="btn btn-danger min-h-9 px-3 py-1.5 text-sm" disabled={deletingId === report.id} onClick={() => void remove(report)} type="button"><Trash2 size={15} /> {deletingId === report.id ? "삭제 중…" : "삭제"}</button>}
               </div>
             </article>
           ))}

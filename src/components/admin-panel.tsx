@@ -264,7 +264,12 @@ export async function AdminPanel({
               </form>
             </div>
           </article>
-          <AiConnectionSettings organizationId={organizationId} />
+          <AiConnectionSettings
+            organizationId={organizationId}
+            initialProvider={data.aiConnection?.provider}
+            initialModel={data.aiConnection?.model}
+            hasApiKey={data.aiConnection?.hasApiKey ?? false}
+          />
           {data.currentMembership.role === "OWNER" && (
             <section className="rounded-2xl border border-red-200 bg-red-50 p-5">
               <h2 className="font-extrabold text-red-900">조직 삭제</h2>

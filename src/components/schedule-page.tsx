@@ -124,7 +124,7 @@ export async function SchedulePage({ organizationId, view, search }: { organizat
           </div>
         </div>
         <div className="no-print flex flex-wrap gap-2">
-          {(context.membership.role === "OWNER" || context.membership.role === "ADMIN") && <Link className="btn btn-primary" href={`/org/${organizationId}/report?view=${view}&date=${dateValue}`}><Sparkles size={17} /> AI 보고서</Link>}
+          <Link className="btn btn-primary" href={`/org/${organizationId}/report?view=${view}&date=${dateValue}`}><Sparkles size={17} /> AI 보고서</Link>
           <Link className="btn btn-secondary" href={`/org/${organizationId}/print?view=${view}&${querySuffix(selectedDate)}`}><Printer size={17} /> 인쇄/PDF</Link>
         </div>
       </header>

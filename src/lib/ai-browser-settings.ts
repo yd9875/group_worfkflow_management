@@ -1,9 +1,3 @@
-export type AiBrowserSettings = {
-  provider: AiProvider;
-  apiKey: string;
-  model: string;
-};
-
 export type AiProvider = "OPENAI" | "ANTHROPIC" | "GEMINI";
 
 export const AI_PROVIDERS: Array<{
@@ -58,35 +52,4 @@ export function getAiProvider(provider: AiProvider) {
 
 export function getDefaultAiModel(provider: AiProvider) {
   return getAiProvider(provider).models[0].value;
-}
-
-export function aiSettingsStorageKey(organizationId: string) {
-  return `org_schedule_ai_connection:${organizationId}`;
-}
-
-export function readAiBrowserSettings(organizationId: string): AiBrowserSettings {
-  const fallback = {
-    provider: DEFAULT_AI_PROVIDER,
-    apiKey: "",
-    model: getDefaultAiModel(DEFAULT_AI_PROVIDER),
-  };
-  if (typeof window === "undefined") return fallback;
-  try {
-    const raw = window.localStorage.getItem(aiSettingsStorageKey(organizationId));
-    if (!raw) return fallback;
-    const parsed = JSON.parse(raw) as Partial<AiBrowserSettings>;
-    const provider = AI_PROVIDERS.some((item) => item.value === parsed.provider)
-      ? parsed.provider as AiProvider
-      : DEFAULT_AI_PROVIDER;
-    const availableModels = getAiProvider(provider).models;
-    return {
-      provider,
-      apiKey: typeof parsed.apiKey === "string" ? parsed.apiKey : "",
-      model: typeof parsed.model === "string" && availableModels.some((item) => item.value === parsed.model)
-        ? parsed.model
-        : getDefaultAiModel(provider),
-    };
-  } catch {
-    return fallback;
-  }
 }

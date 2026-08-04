@@ -10,18 +10,18 @@ export const dynamic = "force-dynamic";
 
 async function authorizedReport(request: Request, reportId: string) {
   const organizationId = z.string().uuid().parse(new URL(request.url).searchParams.get("organizationId"));
-  await requireMembership(organizationId, ["OWNER", "ADMIN"]);
+  const membership = await requireMembership(organizationId);
   const report = await prisma.generatedReport.findFirst({
     where: { id: z.string().uuid().parse(reportId), organizationId },
   });
   if (!report) throw new AppError("NOT_FOUND", "생성된 보고서 파일을 찾지 못했습니다.", 404);
-  return report;
+  return { report, membership };
 }
 
 export async function GET(request: Request, context: { params: Promise<{ reportId: string }> }) {
   try {
     const { reportId } = await context.params;
-    const report = await authorizedReport(request, reportId);
+    const { report } = await authorizedReport(request, reportId);
     const body = await getR2Object(report.objectKey);
     return new Response(Buffer.from(body), {
       headers: {
@@ -42,7 +42,10 @@ export async function GET(request: Request, context: { params: Promise<{ reportI
 export async function DELETE(request: Request, context: { params: Promise<{ reportId: string }> }) {
   try {
     const { reportId } = await context.params;
-    const report = await authorizedReport(request, reportId);
+    const { report, membership } = await authorizedReport(request, reportId);
+    if (membership.role === "MEMBER" && report.createdByUserId !== membership.userId) {
+      throw new AppError("FORBIDDEN", "다른 구성원이 생성한 보고서는 삭제할 수 없습니다.", 403);
+    }
     await deleteR2Object(report.objectKey);
     await prisma.generatedReport.delete({ where: { id: report.id } });
     return NextResponse.json({ ok: true });

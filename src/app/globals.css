@@ -103,6 +103,10 @@ textarea.field { min-height: 6rem; resize: vertical; }
 .schedule-item { display: block; margin-bottom: .3rem; overflow: hidden; border-left: 3px solid var(--brand); border-radius: .42rem; background: var(--brand-soft); padding: .4rem .45rem; font-size: .76rem; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
 .schedule-item-important { border-left-color: var(--accent); background: #fff0e4; }
 .schedule-item-completed > summary { color: #7b8780; text-decoration: line-through; }
+.schedule-item-actions, .day-schedule-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .22rem; margin-top: .35rem; }
+.schedule-action-btn { width: 1.5rem; min-width: 1.5rem; min-height: 1.5rem; height: 1.5rem; gap: 0; border-radius: .4rem; padding: 0; }
+.schedule-action-btn svg { width: .68rem; height: .68rem; }
+.day-schedule-summary::-webkit-details-marker { display: none; }
 .month-grid { display: grid; min-width: 56rem; grid-template-columns: repeat(7, 1fr); }
 .month-cell { min-height: 9.5rem; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: .55rem; }
 .month-head { min-height: auto; background: #f7f9f6; text-align: center; font-size: .8rem; font-weight: 750; }
@@ -158,6 +162,11 @@ textarea.field { min-height: 6rem; resize: vertical; }
   .day-head { min-height: 3rem; }
   .day-label { font-size: .7rem; line-height: 1.25; }
   .schedule-item { margin-bottom: .16rem; border-left-width: 2px; padding: .24rem .25rem; font-size: .58rem; line-height: 1.25; }
+  .schedule-item-actions, .day-schedule-actions { gap: .14rem; margin-top: .25rem; }
+  .schedule-action-btn { width: 1.35rem; min-width: 1.35rem; min-height: 1.35rem; height: 1.35rem; border-radius: .32rem; }
+  .schedule-action-btn svg { width: .6rem; height: .6rem; }
+  .day-schedule-card > .day-schedule-actions { display: none; }
+  .day-schedule-card[open] > .day-schedule-actions { display: flex; }
   .month-grid { min-width: 31.5rem; }
   .month-cell { min-height: 5rem; padding: .25rem; font-size: .64rem; }
   .month-head { min-height: auto; font-size: .66rem; }
