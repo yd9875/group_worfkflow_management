@@ -145,7 +145,6 @@ export async function listSchedules(input: {
       showInWeek: true,
       showInMonth: true,
       isCompleted: true,
-      memo: true,
       departmentId: true,
       targetUserId: true,
       createdByUserId: true,
@@ -212,12 +211,6 @@ export async function searchSchedules(input: {
           OR: [
             { title: { contains: normalizedQuery, mode: "insensitive" } },
             { description: { contains: normalizedQuery, mode: "insensitive" } },
-            {
-              AND: [
-                { scope: { not: "PERSONAL" } },
-                { memo: { contains: normalizedQuery, mode: "insensitive" } },
-              ],
-            },
           ],
         },
       ],
@@ -236,7 +229,6 @@ export async function searchSchedules(input: {
       showInWeek: true,
       showInMonth: true,
       isCompleted: true,
-      memo: true,
       departmentId: true,
       targetUserId: true,
       createdByUserId: true,

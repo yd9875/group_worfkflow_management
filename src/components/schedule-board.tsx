@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { format, isToday } from "date-fns";
 import { ko } from "date-fns/locale";
-import { CheckCircle2, Clock3, Flag, Pencil, StickyNote, Trash2 } from "lucide-react";
+import { CheckCircle2, Clock3, Flag, Pencil, Trash2 } from "lucide-react";
 import { deleteScheduleAction, toggleTaskCompleteAction } from "@/features/actions";
 import { SubmitButton } from "@/components/submit-button";
 
@@ -18,7 +18,6 @@ export type ScheduleItem = {
   showInWeek: boolean;
   showInMonth: boolean;
   isCompleted: boolean;
-  memo: string | null;
   itemType: "SCHEDULE" | "TASK";
   departmentId: string | null;
   departmentName: string | null;
@@ -102,7 +101,6 @@ function Item({
           {schedule.category !== "LEAVE" && schedule.itemType !== "TASK" && <> · {schedule.isAllDay ? "종일" : `${format(schedule.startsAt, "HH:mm")}–${format(schedule.endsAt, "HH:mm")}`}</>}
         </p>
         {schedule.description && <p className="mt-2">{schedule.description}</p>}
-        {schedule.scope !== "PERSONAL" && schedule.memo && <p className="mt-2 flex items-start gap-1 text-slate-600"><StickyNote className="mt-0.5 shrink-0" size={12} /> {schedule.memo}</p>}
         <p className="mt-2 text-slate-500">등록: {schedule.creatorProfileName || "알 수 없음"}</p>
         {!readOnly && <div className="schedule-item-actions no-print">
           <Link aria-label={`${schedule.title} 수정`} className="btn btn-secondary schedule-action-btn" title="수정" href={`/org/${organizationId}/personal?date=${format(schedule.startsAt, "yyyy-MM-dd")}&edit=${schedule.id}`}><Pencil /></Link>
@@ -188,7 +186,6 @@ export function DayBoard({ organizationId, days, departments, schedules }: {
                           {schedule.isCompleted && <span className="badge badge-green"><CheckCircle2 size={12} /> 완료</span>}
                         </div>
                         {schedule.description && <p className="mt-3 whitespace-pre-wrap text-sm leading-6">{schedule.description}</p>}
-                        {schedule.scope !== "PERSONAL" && schedule.memo && <div className="mt-3 rounded-xl bg-amber-50 p-3 text-sm leading-6 text-amber-900"><StickyNote className="mr-2 inline" size={15} />{schedule.memo}</div>}
                       </div>
                     </summary>
                     <div className="day-schedule-actions no-print">

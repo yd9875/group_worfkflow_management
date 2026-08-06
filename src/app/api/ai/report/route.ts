@@ -293,7 +293,6 @@ export async function POST(request: Request) {
       completed: item.isCompleted,
       department: item.department?.name ?? null,
       description: item.description,
-      memo: item.scope === "PERSONAL" ? item.memo : null,
     }));
     const referenceFiles = await Promise.all(organization.reportReferenceFiles.map(async (file) => ({
       fileName: file.fileName,
