@@ -10,6 +10,7 @@ import {
   rotateJoinCodeAction,
   updateDepartmentAction,
   updateMemberAction,
+  updateOrganizationNameAction,
   uploadReportReferenceFileAction,
 } from "@/features/actions";
 import { getAdminData, type AdminSection } from "@/features/queries";
@@ -210,6 +211,15 @@ export async function AdminPanel({
       <section>
         <p className="eyebrow">Organization settings</p><h1 className="page-title mt-1">조직 관리</h1>
         <div className="mt-6 grid max-w-3xl gap-5">
+          <article className="card p-6">
+            <div className="flex items-center gap-3"><Building2 className="text-[var(--brand)]" /><div><h2 className="font-extrabold">조직명</h2><p className="muted text-sm">조직 전체에 표시되는 이름을 변경합니다.</p></div></div>
+            <form action={updateOrganizationNameAction} className="mt-5 flex flex-col gap-3 sm:flex-row">
+              <input type="hidden" name="organizationId" value={organizationId} />
+              <label className="sr-only" htmlFor="organization-name">조직명</label>
+              <input className="field flex-1" defaultValue={data.currentMembership.organization.name} id="organization-name" minLength={2} maxLength={60} name="name" required />
+              <SubmitButton className="btn btn-primary shrink-0" pendingLabel="저장 중…">조직명 저장</SubmitButton>
+            </form>
+          </article>
           <article className="card p-6">
             <div className="flex items-center gap-3"><KeyRound className="text-[var(--brand)]" /><div><h2 className="font-extrabold">입장 코드</h2><p className="muted text-sm">코드를 공유하면 사용자가 조직 입장을 신청할 수 있습니다.</p></div></div>
             <p className="my-5 rounded-xl bg-slate-50 px-5 py-4 text-center font-mono text-2xl font-bold tracking-[.28em]">{joinCode}</p>

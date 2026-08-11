@@ -819,6 +819,35 @@ export async function updateOrganizationProfileAction(formData: FormData) {
   revalidatePath(`/org/${organizationId}`, "layout");
 }
 
+export async function updateOrganizationNameAction(formData: FormData) {
+  const organizationId = text(formData, "organizationId");
+  const membership = await requireMembership(organizationId, ["OWNER", "ADMIN"]);
+  const name = z.string().trim().min(2).max(60).parse(text(formData, "name"));
+
+  if (name === membership.organization.name) return;
+
+  await prisma.$transaction([
+    prisma.organization.update({
+      where: { id: organizationId },
+      data: { name },
+    }),
+    prisma.auditLog.create({
+      data: {
+        organizationId,
+        actorUserId: membership.userId,
+        action: "ORGANIZATION_NAME_UPDATED",
+        entityType: "ORGANIZATION",
+        entityId: organizationId,
+        metadataJson: { previousName: membership.organization.name, name },
+      },
+    }),
+  ]);
+  revalidatePath(`/org/${organizationId}`, "layout");
+  revalidatePath(`/org/${organizationId}/admin/settings`);
+  revalidatePath("/organizations");
+  revalidatePath("/account");
+}
+
 export async function deleteOrganizationAction(formData: FormData) {
   const organizationId = text(formData, "organizationId");
   const membership = await requireMembership(organizationId, ["OWNER"]);
